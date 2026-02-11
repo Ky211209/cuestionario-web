@@ -25,8 +25,12 @@ let startTime = null;
 
 // 1. MANEJO DE SESIÓN PERMANENTE
 onAuthStateChanged(auth, async (user) => {
+    // IMPORTANTE: Asegurar que el enlace admin esté oculto por defecto
+    const adminLinkContainer = document.getElementById('admin-link-container');
+    
     if (user) {
         const userEmail = user.email.toLowerCase();
+        console.log('Usuario autenticado:', userEmail);
         
         // Verificar si el usuario tiene acceso permitido
         const tieneAcceso = USUARIOS_PERMITIDOS.includes(userEmail);
@@ -57,18 +61,29 @@ onAuthStateChanged(auth, async (user) => {
         document.getElementById('user-info').innerText = `${user.displayName.toUpperCase()} (2 Disp.)`;
         
         // Mostrar enlace de panel admin SOLO si es la administradora
-        if (userEmail === ADMIN_EMAIL) {
-            document.getElementById('admin-link-container').classList.remove('hidden');
+        const esAdmin = userEmail === ADMIN_EMAIL;
+        console.log('¿Es administradora?', esAdmin, '(Email admin esperado:', ADMIN_EMAIL + ')');
+        
+        if (esAdmin) {
+            console.log('Mostrando enlace del panel admin');
+            adminLinkContainer.classList.remove('hidden');
+            adminLinkContainer.style.display = 'block';
         } else {
-            document.getElementById('admin-link-container').classList.add('hidden');
+            console.log('Ocultando enlace del panel admin');
+            adminLinkContainer.classList.add('hidden');
+            adminLinkContainer.style.display = 'none';
         }
         
         cargarMaterias();
     } else {
+        console.log('Usuario no autenticado');
         document.getElementById('auth-screen').classList.remove('hidden');
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('user-display').classList.add('hidden');
-        document.getElementById('admin-link-container').classList.add('hidden');
+        if (adminLinkContainer) {
+            adminLinkContainer.classList.add('hidden');
+            adminLinkContainer.style.display = 'none';
+        }
     }
 });
 
