@@ -1,8 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, collection, getDocs, query } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// Tu configuración real de Firebase
 const firebaseConfig = {
     apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y",
     authDomain: "autenticacion-8faac.firebaseapp.com",
@@ -16,12 +15,11 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-// CONFIGURACIÓN VIP (QUEMADOS EN CÓDIGO)
 const USUARIOS_VIP = {
-    "kholguinb2@unemi.edu.ec": 2, // Admin Total
+    "kholguinb2@unemi.edu.ec": 2, 
     "iastudillol@unemi.edu.ec": 2, 
     "naguilarb@unemi.edu.ec": 2,   
-    "csanchezl3@unemi.edu.ec": 1   // Sánchez solo 1
+    "csanchezl3@unemi.edu.ec": 1   
 };
 
 onAuthStateChanged(auth, async (user) => {
@@ -40,10 +38,10 @@ onAuthStateChanged(auth, async (user) => {
             document.getElementById('auth-screen').classList.add('hidden');
             document.getElementById('setup-screen').classList.remove('hidden');
             document.getElementById('user-display').classList.remove('hidden');
-            document.getElementById('user-info').innerText = `${user.displayName} (Límite: ${limite})`;
+            document.getElementById('user-info').innerText = `${user.displayName} (${limite} Disp.)`;
             cargarMaterias();
         } else {
-            alert("Acceso Denegado: No estás registrado en el sistema.");
+            alert("Acceso Denegado: No estás en la lista autorizada.");
             signOut(auth);
         }
     } else {
@@ -53,24 +51,17 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// VALIDACIÓN DE MATERIA VACÍA
 async function iniciarSimulador() {
     const materiaId = document.getElementById('subject-select').value;
-    if (!materiaId) return;
-
-    // Consultamos si hay preguntas en Firebase para esta materia
-    const q = collection(db, `bancos_preguntas/${materiaId}/preguntas`);
-    const snap = await getDocs(q);
+    const snap = await getDocs(collection(db, `bancos_preguntas/${materiaId}/preguntas`));
 
     if (snap.empty) {
-        alert("Atención Estudiante: No existen preguntas cargadas por el momento para esta materia. Por favor, elige otra.");
-        return; // Detenemos el flujo aquí
+        alert("Atención: No existen preguntas cargadas por el momento para esta materia.");
+        return; 
     }
 
-    // Si hay preguntas, procedemos a cambiar de pantalla
     document.getElementById('setup-screen').classList.add('hidden');
     document.getElementById('quiz-screen').classList.remove('hidden');
-    // ... aquí llamaría a tu función de mostrarPregunta()
 }
 
 async function cargarMaterias() {
@@ -80,8 +71,7 @@ async function cargarMaterias() {
     select.innerHTML = '<option value="">-- Selecciona Materia --</option>';
     data.materias.forEach(m => {
         const opt = document.createElement('option');
-        opt.value = m.id;
-        opt.textContent = m.nombre;
+        opt.value = m.id; opt.textContent = m.nombre;
         select.appendChild(opt);
     });
 }
@@ -90,7 +80,7 @@ document.getElementById('btn-login').onclick = () => signInWithPopup(auth, provi
 document.getElementById('btn-logout').onclick = () => signOut(auth);
 document.getElementById('btn-start').onclick = iniciarSimulador;
 document.getElementById('btn-return').onclick = () => {
-    if(confirm("¿Seguro que deseas volver a la selección de materias?")) {
+    if(confirm("¿Volver a la selección de materias?")) {
         document.getElementById('quiz-screen').classList.add('hidden');
         document.getElementById('setup-screen').classList.remove('hidden');
     }
