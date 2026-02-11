@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Admin - CRUD Profesional UNEMI</title>
+    <title>Panel Admin - Gestión UNEMI</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -14,83 +14,62 @@
     </header>
 
     <div class="container" id="admin-main" style="max-width: 800px; margin-top: 100px;">
-        <nav style="display:flex; justify-content:center; gap:10px; margin-bottom:20px;">
-            <button onclick="changeTab('tab-excel')" class="btn-secondary">Excel</button>
-            <button onclick="changeTab('tab-users')" class="btn-secondary">Alumnos</button>
-        </nav>
-
         <div id="tab-excel">
-            <h3>Carga Masiva</h3>
-            <input type="file" id="upload-excel" accept=".xlsx">
+            <h3>Carga Masiva de Preguntas</h3>
+            <p style="font-size: 0.8rem; margin-bottom: 15px;">Asegúrate que el Excel tenga la columna <b>materia_id</b>.</p>
+            <input type="file" id="upload-excel" accept=".xlsx" style="margin-bottom: 20px;">
             <button id="btn-save-excel" class="btn-primary">Subir a Firebase</button>
-        </div>
-
-        <div id="tab-users" class="hidden">
-            <h3>Gestión de Alumnos (CRUD)</h3>
-            <div style="background:#f8f9fa; padding:15px; border-radius:8px; margin-bottom:20px;">
-                <input type="email" id="edit-email" placeholder="correo@unemi.edu.ec" style="width:100%; padding:10px; margin-bottom:10px;">
-                <select id="edit-limit" style="width:100%; padding:10px;"><option value="1">1 Disp.</option><option value="2">2 Disp.</option></select>
-                <button id="btn-update-user" class="btn-primary">Guardar / Actualizar</button>
-            </div>
-            <table>
-                <thead><tr><th>Correo</th><th>Disp.</th><th>Acción</th></tr></thead>
-                <tbody id="user-table-body"></tbody>
-            </table>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, writeBatch, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        async function loadUsers() {
-            const body = document.getElementById('user-table-body');
-            body.innerHTML = "";
-            const snap = await getDocs(collection(db, "settings_usuarios"));
-            if (snap.empty) { body.innerHTML = "<tr><td colspan='3'>No existen usuarios registrados.</td></tr>"; return; }
-            snap.forEach(d => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${d.id}</td><td>${d.data().max_dispositivos}</td><td>
-                    <button onclick="prepareEdit('${d.id}', ${d.data().max_dispositivos})" class="btn-edit">✏️</button>
-                    <button onclick="confirmDelete('${d.id}')" class="btn-delete">🗑️</button></td>`;
-                body.appendChild(tr);
-            });
-        }
+        let datosExcel = [];
 
-        window.prepareEdit = (email, limit) => { document.getElementById('edit-email').value = email; document.getElementById('edit-limit').value = limit; };
+        document.getElementById('upload-excel').onchange = (e) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+                datosExcel = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+            };
+            reader.readAsArrayBuffer(e.target.files[0]);
+        };
 
-        // ACTUALIZAR CON CONFIRMACIÓN
-        document.getElementById('btn-update-user').onclick = async () => {
-            const email = document.getElementById('edit-email').value.trim().toLowerCase();
-            if (!email) { Swal.fire('Error', 'no existen usuarios para actualizar', 'warning'); return; }
-            
-            Swal.fire({ title: '¿Confirmar cambios?', text: '¿está seguro de que la información esta correcta?', icon: 'question', showCancelButton: true })
-            .then(async (res) => {
-                if (res.isConfirmed) {
-                    await setDoc(doc(db, "settings_usuarios", email), { max_dispositivos: parseInt(document.getElementById('edit-limit').value) });
-                    Swal.fire('Guardado', 'Cambios aplicados.', 'success'); loadUsers();
+        document.getElementById('btn-save-excel').onclick = async () => {
+            if(datosExcel.length === 0) {
+                Swal.fire('Atención', 'Primero selecciona un archivo Excel.', 'warning');
+                return;
+            }
+
+            Swal.fire({
+                title: 'Confirmar Carga',
+                text: `¿Deseas subir ${datosExcel.length} preguntas?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, subir'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    const batch = writeBatch(db);
+                    datosExcel.forEach((p, i) => {
+                        // RUTA UNIFICADA: bancos_preguntas -> materia_id -> preguntas
+                        const ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${i}`);
+                        batch.set(ref, {
+                            texto: p.texto,
+                            opciones: [p.opcion_0, p.opcion_1, p.opcion_2, p.opcion_3],
+                            respuesta: parseInt(p.respuesta),
+                            explicacion: p.explicacion || ""
+                        });
+                    });
+                    await batch.commit();
+                    Swal.fire('¡Éxito!', 'Carga masiva completada correctamente.', 'success');
                 }
             });
-        };
-
-        // BORRAR CON CONFIRMACIÓN
-        window.confirmDelete = (email) => {
-            if (!email) { Swal.fire('Error', 'no existen usuarios para eliminar', 'warning'); return; }
-            Swal.fire({ title: '¿Eliminar usuario?', text: '¿está seguro de borrar al usuario?', icon: 'warning', showCancelButton: true })
-            .then(async (res) => {
-                if (res.isConfirmed) { await deleteDoc(doc(db, "settings_usuarios", email)); loadUsers(); }
-            });
-        };
-
-        window.changeTab = (id) => {
-            document.getElementById('tab-excel').classList.add('hidden');
-            document.getElementById('tab-users').classList.add('hidden');
-            document.getElementById(id).classList.remove('hidden');
-            if (id === 'tab-users') loadUsers();
         };
     </script>
 </body>
