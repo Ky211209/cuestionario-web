@@ -2,68 +2,273 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Panel Admin - Carga Masiva</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Administrativo UNEMI</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <div class="container" id="admin-access-denied">
-        <h2>Acceso Denegado</h2>
-        <p>Solo la administradora puede gestionar preguntas.</p>
-        <button onclick="window.location.href='index.html'">Volver</button>
-    </div>
 
-    <div class="container hidden" id="admin-panel">
-        <h2>Panel de Carga Masiva</h2>
-        <input type="file" id="upload-excel" accept=".xlsx, .xls, .csv">
-        <div id="preview-area" class="hidden">
-            <div id="stats-summary"></div>
-            <button id="btn-confirm-upload" class="btn-primary">Confirmar Guardado Inmediato</button>
+    <div class="container" id="admin-access-denied">
+        <div style="text-align: center;">
+            <i class="fas fa-shield-alt fa-5x" style="color: var(--primary-color); margin-bottom: 20px;"></i>
+            <h2>Acceso Restringido</h2>
+            <p id="auth-status">Este panel es exclusivo para la administradora del sistema.</p>
+            <button id="btn-login-google" class="btn-primary">
+                <i class="fab fa-google"></i> Validar Credenciales UNEMI
+            </button>
+            <br><br>
+            <button onclick="window.location.href='index.html'" style="background-color: #666;">Volver al Simulador</button>
         </div>
     </div>
 
+    <div id="main-admin-container" class="hidden" style="max-width: 900px; margin: 2rem auto;">
+        
+        <nav class="admin-nav-container">
+            <ul class="admin-menu">
+                <li>
+                    <button id="nav-btn-upload" class="active">
+                        <i class="fas fa-file-upload"></i> Carga Masiva de Preguntas
+                    </button>
+                </li>
+                <li>
+                    <button id="nav-btn-users">
+                        <i class="fas fa-user-cog"></i> Crear/Editar Usuario
+                    </button>
+                </li>
+            </ul>
+        </nav>
+
+        <div class="container section-tab" id="section-upload">
+            <h2><i class="fas fa-file-excel"></i> Carga Masiva desde Excel/CSV</h2>
+            <p>Selecciona el archivo con el formato correcto (materia_id, texto, opciones, respuesta, explicacion).</p>
+            
+            <div style="margin: 2rem 0; padding: 2rem; border: 2px dashed var(--primary-color); border-radius: 10px; text-align: center;">
+                <input type="file" id="upload-excel" accept=".xlsx, .xls, .csv" style="display: none;">
+                <label for="upload-excel" class="btn-primary" style="cursor: pointer;">
+                    <i class="fas fa-folder-open"></i> Seleccionar Archivo
+                </label>
+                <p id="file-name-display" style="margin-top: 10px; font-style: italic; color: #666;"></p>
+            </div>
+
+            <div id="preview-area" class="hidden">
+                <div id="stats-summary" style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; color: var(--primary-color); font-weight: bold;"></div>
+                <button id="btn-confirm-upload" class="btn-primary" style="width: 100%; font-size: 1.2rem;">
+                    <i class="fas fa-cloud-upload-alt"></i> Confirmar Guardado Inmediato
+                </button>
+            </div>
+        </div>
+
+        <div class="container section-tab hidden" id="section-users">
+            <h2><i class="fas fa-user-shield"></i> Pre-configurar Acceso de Usuario</h2>
+            <p>Define los permisos para un estudiante antes de que inicie sesión por primera vez.</p>
+            
+            <div style="background: white; padding: 2rem; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.05);">
+                <div class="user-form-group">
+                    <label for="user-email-input">Correo Electrónico del Estudiante (UNEMI):</label>
+                    <input type="email" id="user-email-input" placeholder="ejemplo@unemi.edu.ec">
+                </div>
+                <div class="user-form-group">
+                    <label for="device-limit-select">Límite de Dispositivos Simultáneos:</label>
+                    <select id="device-limit-select">
+                        <option value="1">1 Dispositivo (Estándar)</option>
+                        <option value="2">2 Dispositivos (Especial)</option>
+                    </select>
+                </div>
+                <button id="btn-save-user-config" class="btn-primary" style="width: 100%;">
+                    <i class="fas fa-save"></i> Guardar Configuración
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+
     <script type="module">
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-        import { getFirestore, writeBatch, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        // Importamos las funciones necesarias de Firebase
+        import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getFirestore, writeBatch, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        // IMPORTANTE: Asegúrate de que script.js exporte 'app' o inicializa aquí mismo si da problemas.
+        // Si script.js ya hace initializeApp, el getAuth() y getFirestore() lo tomarán automáticamente.
 
         const auth = getAuth();
         const db = getFirestore();
+        const provider = new GoogleAuthProvider();
+        
+        // TU CORREO DE ADMINISTRADORA (FUNDAMENTAL)
         const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
 
+        // --- 1. LÓGICA DE AUTENTICACIÓN ---
+
+        // Botón para loguearse con Google si aparece la pantalla de bloqueo
+        document.getElementById('btn-login-google').addEventListener('click', () => {
+            signInWithPopup(auth, provider)
+                .then((result) => {
+                    // Una vez logueado, el onAuthStateChanged manejará la UI
+                    console.log("Login exitoso:", result.user.email);
+                    if(result.user.email !== ADMIN_EMAIL){
+                         alert("Lo sentimos, este correo no tiene permisos de administrador.");
+                         auth.signOut();
+                    }
+                }).catch((error) => {
+                    console.error("Error login:", error);
+                    alert("Error de autenticación: Asegúrate de que el dominio ky211209.github.io esté autorizado en Firebase.");
+                });
+        });
+
+        // Monitor de estado: ¿Quién está conectado?
         onAuthStateChanged(auth, (user) => {
             if (user && user.email === ADMIN_EMAIL) {
+                // ¡Eres tú! Oculta el bloqueo y muestra el panel principal con el menú
                 document.getElementById('admin-access-denied').classList.add('hidden');
-                document.getElementById('admin-panel').classList.remove('hidden');
+                document.getElementById('main-admin-container').classList.remove('hidden');
+            } else {
+                // No hay usuario o no es el admin: muestra el bloqueo
+                document.getElementById('admin-access-denied').classList.remove('hidden');
+                document.getElementById('main-admin-container').classList.add('hidden');
+                if(user) { console.log("Usuario conectado pero no es admin:", user.email); }
             }
         });
 
-        document.getElementById('upload-excel').addEventListener('change', (e) => {
+
+        // --- 2. LÓGICA DEL MENÚ DE NAVEGACIÓN ---
+        const btnShowUpload = document.getElementById('nav-btn-upload');
+        const btnShowUsers = document.getElementById('nav-btn-users');
+        const sectionUpload = document.getElementById('section-upload');
+        const sectionUsers = document.getElementById('section-users');
+
+        // Función para cambiar de pestaña
+        function switchTab(tabName) {
+            if (tabName === 'upload') {
+                sectionUpload.classList.remove('hidden');
+                sectionUsers.classList.add('hidden');
+                btnShowUpload.classList.add('active');
+                btnShowUsers.classList.remove('active');
+            } else {
+                sectionUpload.classList.add('hidden');
+                sectionUsers.classList.remove('hidden');
+                btnShowUpload.classList.remove('active');
+                btnShowUsers.classList.add('active');
+            }
+        }
+
+        btnShowUpload.addEventListener('click', () => switchTab('upload'));
+        btnShowUsers.addEventListener('click', () => switchTab('users'));
+
+
+        // --- 3. LÓGICA DE CARGA MASIVA (Tu código existente mejorado visualmente) ---
+        const fileInput = document.getElementById('upload-excel');
+        fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
+            if (!file) return;
+            // Mostrar el nombre del archivo seleccionado
+            document.getElementById('file-name-display').innerText = `Archivo seleccionado: ${file.name}`;
+            
             const reader = new FileReader();
             reader.onload = (event) => {
-                const workbook = XLSX.read(new Uint8Array(event.target.result), { type: 'array' });
-                window.datosCarga = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-                document.getElementById('preview-area').classList.remove('hidden');
-                document.getElementById('stats-summary').innerText = `Se encontraron ${window.datosCarga.length} preguntas.`;
+                try {
+                    const workbook = XLSX.read(new Uint8Array(event.target.result), { type: 'array' });
+                    // Asume que los datos están en la primera hoja
+                    window.datosCarga = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                    
+                    // Validación básica
+                    if(window.datosCarga.length === 0 || !window.datosCarga[0].materia_id) {
+                        alert("Error: El archivo parece estar vacío o no tiene la columna 'materia_id'.");
+                        return;
+                    }
+
+                    document.getElementById('preview-area').classList.remove('hidden');
+                    document.getElementById('stats-summary').innerHTML = `
+                        <i class="fas fa-check-circle"></i> Análisis exitoso.<br>
+                        Se encontraron <strong>${window.datosCarga.length}</strong> preguntas listas para cargar.
+                        Materia detectada: <strong>${window.datosCarga[0].materia_id}</strong>
+                    `;
+                } catch (error) {
+                    alert("Error al leer el archivo Excel. Verifica el formato.");
+                    console.error(error);
+                }
             };
             reader.readAsArrayBuffer(file);
         });
 
         document.getElementById('btn-confirm-upload').addEventListener('click', async () => {
-            const batch = writeBatch(db);
-            window.datosCarga.forEach((p, i) => {
-                const ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${i}_${Date.now()}`);
-                batch.set(ref, {
-                    texto: p.texto,
-                    opciones: [p.opcion_0, p.opcion_1, p.opcion_2, p.opcion_3],
-                    respuesta: parseInt(p.respuesta),
-                    explicacion: p.explicacion
+            const btn = document.getElementById('btn-confirm-upload');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Subiendo...';
+
+            try {
+                const batch = writeBatch(db);
+                window.datosCarga.forEach((p, i) => {
+                    // Validar que respuesta sea un número
+                    let respIndex = parseInt(p.respuesta);
+                    if(isNaN(respIndex) || respIndex < 0 || respIndex > 3) respIndex = 0; // Valor seguro
+
+                    const ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${i}`);
+                    batch.set(ref, {
+                        texto: p.texto || "Pregunta sin texto",
+                        opciones: [
+                            p.opcion_0 || "", 
+                            p.opcion_1 || "", 
+                            p.opcion_2 || "", 
+                            p.opcion_3 || ""
+                        ],
+                        respuesta: respIndex,
+                        explicacion: p.explicacion || "",
+                        creado_el: serverTimestamp()
+                    });
                 });
-            });
-            await batch.commit();
-            alert("Carga completada.");
-            location.reload();
+                await batch.commit();
+                alert("✅ Carga completada exitosamente.");
+                location.reload();
+            } catch (error) {
+                console.error("Error en la carga batch:", error);
+                alert("Hubo un error al subir los datos a Firebase. Revisa la consola.");
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Confirmar Guardado Inmediato';
+            }
         });
+
+
+        // --- 4. NUEVA LÓGICA: GESTIÓN DE USUARIOS ---
+        document.getElementById('btn-save-user-config').addEventListener('click', async () => {
+            const emailInput = document.getElementById('user-email-input');
+            const limitSelect = document.getElementById('device-limit-select');
+            const email = emailInput.value.trim().toLowerCase();
+            const limit = parseInt(limitSelect.value);
+
+            if (!email || !email.includes('@unemi.edu.ec')) {
+                alert("Por favor, ingresa un correo institucional válido (@unemi.edu.ec).");
+                return;
+            }
+
+            const btnSave = document.getElementById('btn-save-user-config');
+            btnSave.disabled = true;
+            btnSave.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+            try {
+                // Creamos/Sobreescribimos un documento en una colección especial para configuraciones
+                // Usamos el email como ID del documento para encontrarlo fácil después.
+                const userSettingsRef = doc(db, "settings_usuarios", email);
+                
+                await setDoc(userSettingsRef, {
+                    email: email,
+                    max_dispositivos: limit,
+                    configurado_por: ADMIN_EMAIL,
+                    fecha_configuracion: serverTimestamp()
+                }, { merge: true }); // merge: true por si ya existe, solo actualiza campos
+
+                alert(`✅ Configuración guardada para ${email}.\nLímite asignado: ${limit} dispositivo(s).`);
+                emailInput.value = ''; // Limpiar campo
+            } catch (error) {
+                console.error("Error al guardar configuración de usuario:", error);
+                alert("Error al guardar en Firebase. Verifica tus permisos.");
+            } finally {
+                btnSave.disabled = false;
+                btnSave.innerHTML = '<i class="fas fa-save"></i> Guardar Configuración';
+            }
+        });
+
     </script>
 </body>
 </html>
