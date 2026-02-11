@@ -573,12 +573,13 @@ function guardarAvanceAutomatico() {
 // 10. CERRAR SESIÓN
 document.getElementById('btn-logout').onclick = () => {
     Swal.fire({
-        title: '¿Cerrar Sesión?',
-        text: currentMode === "study" ? "Tu progreso en esta materia ha sido guardado automáticamente." : "¿Deseas salir del simulador?",
+        title: 'Cerrar Sesión',
+        text: currentMode === "study" ? "Tu progreso ha sido guardado automáticamente y podrás continuar más tarde." : "¿Estás seguro de que deseas cerrar sesión?",
         icon: 'question',
         showCancelButton: true,
+        cancelButtonText: 'Cancelar',
         confirmButtonColor: '#1a73e8',
-        confirmButtonText: 'Sí, salir'
+        confirmButtonText: 'Aceptar'
     }).then((result) => { 
         if (result.isConfirmed) {
             stopTimer();
