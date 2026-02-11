@@ -2,8 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel Administrativo - UNEMI</title>
+    <title>Panel Admin - UNEMI</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -11,138 +10,92 @@
 </head>
 <body>
     <header>
-        <div class="logo">
-            <i class="fa-solid fa-shield-halved" style="color: #1a73e8;"></i>
-            <h1>Panel Admin <span class="subtitle">Gestión Académica</span></h1>
-        </div>
+        <div class="logo"><h1>Panel Admin <span class="subtitle">UNEMI</span></h1></div>
         <div style="display: flex; gap: 15px; align-items: center;">
-            <span id="admin-name" style="font-weight: bold; color: #1a73e8; font-size: 0.9rem;"></span>
-            <button onclick="window.location.href='index.html'" class="btn-secondary">
-                <i class="fas fa-home"></i> Volver al Simulador
-            </button>
+            <span id="admin-name" style="font-weight: bold; color: #1a73e8;"></span>
+            <button onclick="window.location.href='index.html'" class="btn-secondary">Volver al Simulador</button>
             <button id="btn-admin-logout" class="btn-secondary">Cerrar Sesión</button>
         </div>
     </header>
 
-    <div class="container" id="admin-panel" style="max-width: 850px; margin-top: 20px;">
-        <div class="admin-tabs" style="margin-bottom: 25px;">
-            <button onclick="changeTab('tab-excel')" id="btn-tab-excel" class="tab-btn active">Cargar Excel</button>
-            <button onclick="changeTab('tab-users')" id="btn-tab-users" class="tab-btn">Gestionar Alumnos</button>
+    <div class="container" style="margin-top: 30px; max-width: 800px;">
+        <nav style="display: flex; justify-content: center; gap: 10px; margin-bottom: 25px;">
+            <button onclick="changeTab('tab-excel')" id="btn-tab-excel" class="btn-secondary">Cargar Excel</button>
+            <button onclick="changeTab('tab-users')" id="btn-tab-users" class="btn-secondary">Gestionar Alumnos</button>
+        </nav>
+
+        <div id="tab-excel">
+            <h3>Carga Masiva de Preguntas</h3>
+            <input type="file" id="upload-excel" accept=".xlsx" style="margin: 20px 0;">
+            <button id="btn-save-excel" class="btn-primary">Subir a Firebase</button>
         </div>
 
-        <div id="tab-excel" class="tab-content">
-            <h3><i class="fas fa-file-excel"></i> Carga de Preguntas</h3>
-            <p style="font-size: 0.85rem; color: #666; margin: 15px 0;">La materia se asigna automáticamente por la columna <strong>materia_id</strong>.</p>
-            <div style="border: 2px dashed #ddd; padding: 20px; border-radius: 10px; background: #fafafa;">
-                <input type="file" id="upload-excel" accept=".xlsx">
-            </div>
-            <div id="preview-area" class="hidden" style="margin-top: 20px; padding: 15px; background: #e8f0fe; border-radius: 8px;">
-                <p id="stats-summary" style="font-weight: bold; color: #1a73e8;"></p>
-                <button id="btn-save-excel" class="btn-primary" style="margin-top: 10px;">Subir a Firebase</button>
-            </div>
-        </div>
-
-        <div id="tab-users" class="tab-content hidden">
-            <h3>Gestión de Alumnos (Lista Blanca)</h3>
-            <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #eee;">
-                <input type="email" id="edit-email" placeholder="correo@unemi.edu.ec" style="margin-bottom: 10px;">
-                <select id="edit-limit" style="margin-bottom: 15px;">
+        <div id="tab-users" class="hidden">
+            <h3>Gestión de Alumnos (CRUD)</h3>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <input type="email" id="edit-email" placeholder="correo@unemi.edu.ec" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 10px;">
+                <select id="edit-limit" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 10px;">
                     <option value="1">1 Dispositivo</option>
                     <option value="2">2 Dispositivos</option>
                 </select>
                 <button id="btn-update-user" class="btn-primary">Guardar / Actualizar Alumno</button>
             </div>
-
             <table>
-                <thead>
-                    <tr>
-                        <th>CORREO ELECTRÓNICO</th>
-                        <th style="text-align:center;">DISP.</th>
-                        <th style="text-align:center;">ACCIONES</th>
-                    </tr>
-                </thead>
-                <tbody id="user-table-body">
-                    </tbody>
+                <thead><tr><th>Correo</th><th>Disp.</th><th>Acciones</th></tr></thead>
+                <tbody id="user-table-body"></tbody>
             </table>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, deleteDoc, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-        const firebaseConfig = { 
-            apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", 
-            authDomain: "autenticacion-8faac.firebaseapp.com", 
-            projectId: "autenticacion-8faac", 
-            storageBucket: "autenticacion-8faac.firebasestorage.app", 
-            appId: "1:939518706600:web:d28c3ec7de21da8379939d" 
-        };
-
+        const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
 
+        onAuthStateChanged(auth, (user) => { if(user) document.getElementById('admin-name').innerText = user.displayName.toUpperCase(); });
+
+        // --- CARGA MASIVA ---
         let dataExcel = [];
-
-        // 1. SESIÓN Y PERMISOS
-        onAuthStateChanged(auth, (user) => {
-            if (user && user.email === ADMIN_EMAIL) {
-                document.getElementById('admin-name').innerText = user.displayName.toUpperCase();
-                loadUsers();
-            } else if (user) {
-                Swal.fire('Acceso Denegado', 'No eres administrador.', 'error').then(() => signOut(auth).then(() => location.href='index.html'));
-            }
-        });
-
-        document.getElementById('btn-admin-logout').onclick = () => {
-            Swal.fire({ title: '¿Cerrar Sesión?', text: '¿Desea salir del panel administrativo?', icon: 'question', showCancelButton: true, confirmButtonColor: '#1a73e8' })
-                .then((r) => { if(r.isConfirmed) signOut(auth).then(() => location.href='index.html'); });
-        };
-
-        // 2. LÓGICA EXCEL
         document.getElementById('upload-excel').onchange = (e) => {
             const reader = new FileReader();
             reader.onload = (ev) => {
                 const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
                 dataExcel = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-                if(dataExcel.length > 0) {
-                    document.getElementById('preview-area').classList.remove('hidden');
-                    document.getElementById('stats-summary').innerText = `Materia: ${dataExcel[0].materia_id} (${dataExcel.length} preguntas)`;
-                }
             };
             reader.readAsArrayBuffer(e.target.files[0]);
         };
 
         document.getElementById('btn-save-excel').onclick = async () => {
-            Swal.fire({ title: 'Confirmar Carga', text: `¿Subir ${dataExcel.length} preguntas?`, icon: 'info', showCancelButton: true })
-            .then(async (result) => {
-                if (result.isConfirmed) {
-                    Swal.fire({ title: 'Cargando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            if(dataExcel.length === 0) return Swal.fire('Error', 'Selecciona un archivo primero.', 'warning');
+            Swal.fire({ title: 'Confirmar Carga', text: `¿Deseas subir ${dataExcel.length} preguntas?`, icon: 'question', showCancelButton: true })
+            .then(async (r) => {
+                if(r.isConfirmed) {
                     const batch = writeBatch(db);
                     dataExcel.forEach((p, i) => {
                         const ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${i}`);
-                        batch.set(ref, { texto: p.texto, opciones: [p.opcion_0, p.opcion_1, p.opcion_2, p.opcion_3], respuesta: parseInt(p.respuesta), explicacion: p.explicacion || "" });
+                        batch.set(ref, { texto: p.texto, opciones: [p.opcion_0, p.opcion_1, p.opcion_2, p.opcion_3], respuesta: parseInt(p.respuesta) });
                     });
                     await batch.commit();
-                    Swal.fire('¡Éxito!', 'Carga masiva completada.', 'success').then(() => location.reload());
+                    Swal.fire('¡Éxito!', 'Carga completada profesionalmente.', 'success').then(() => location.reload());
                 }
             });
         };
 
-        // 3. LÓGICA CRUD ALUMNOS
+        // --- CRUD USUARIOS ---
         async function loadUsers() {
             const body = document.getElementById('user-table-body');
-            body.innerHTML = "<tr><td colspan='3'>Cargando...</td></tr>";
+            body.innerHTML = "";
             const snap = await getDocs(collection(db, "usuarios_seguros"));
-            body.innerHTML = snap.empty ? "<tr><td colspan='3' style='text-align:center;'>No hay usuarios.</td></tr>" : "";
             snap.forEach(d => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${d.id}</td><td style="text-align:center;">${d.data().max_dispositivos}</td><td style="text-align:center;">
-                    <button onclick="prepareEdit('${d.id}', ${d.data().max_dispositivos})" class="btn-edit"><i class="fas fa-edit"></i></button>
-                    <button onclick="confirmDelete('${d.id}')" class="btn-delete"><i class="fas fa-trash"></i></button></td>`;
+                tr.innerHTML = `<td>${d.id}</td><td>${d.data().max_dispositivos}</td><td>
+                    <button onclick="window.prepareEdit('${d.id}', ${d.data().max_dispositivos})" class="btn-edit"><i class="fas fa-edit"></i></button>
+                    <button onclick="window.confirmDelete('${d.id}')" class="btn-delete"><i class="fas fa-trash"></i></button></td>`;
                 body.appendChild(tr);
             });
         }
@@ -152,30 +105,32 @@
             document.getElementById('edit-limit').value = limit;
         };
 
-        window.confirmDelete = async (email) => {
-            if(!email) return Swal.fire('Atención', 'no existen usuarios para eliminar', 'warning');
+        window.confirmDelete = (email) => {
+            if(!email) return Swal.fire('Error', 'no existen usuarios para eliminar', 'warning');
             Swal.fire({ title: '¿Borrar usuario?', text: '¿está seguro de borrar al usuario?', icon: 'warning', showCancelButton: true })
             .then(async (r) => { if(r.isConfirmed) { await deleteDoc(doc(db, "usuarios_seguros", email)); loadUsers(); } });
         };
 
         document.getElementById('btn-update-user').onclick = async () => {
             const email = document.getElementById('edit-email').value.trim().toLowerCase();
-            if(!email) return Swal.fire('Atención', 'no existen usuarios para actualizar', 'warning');
+            if(!email) return Swal.fire('Error', 'no existen usuarios para actualizar', 'warning');
             Swal.fire({ title: 'Confirmar', text: '¿está seguro de que la información esta correcta?', icon: 'question', showCancelButton: true })
             .then(async (r) => {
                 if(r.isConfirmed) {
                     await setDoc(doc(db, "usuarios_seguros", email), { max_dispositivos: parseInt(document.getElementById('edit-limit').value) });
-                    Swal.fire('Éxito', 'Información guardada.', 'success'); loadUsers();
+                    Swal.fire('Éxito', 'Información actualizada.', 'success'); loadUsers();
                 }
             });
         };
 
         window.changeTab = (id) => {
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById(id).classList.remove('hidden');
-            document.getElementById('btn-' + id).classList.add('active');
-            if (id === 'tab-users') loadUsers();
+            document.getElementById('tab-excel').classList.toggle('hidden', id !== 'tab-excel');
+            document.getElementById('tab-users').classList.toggle('hidden', id !== 'tab-users');
+            if(id === 'tab-users') loadUsers();
+        };
+
+        document.getElementById('btn-admin-logout').onclick = () => {
+            if(confirm("¿Desea cerrar sesión?")) signOut(auth).then(() => location.href='index.html');
         };
     </script>
 </body>
