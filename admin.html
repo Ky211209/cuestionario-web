@@ -2,47 +2,39 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Panel Admin </title>
+    <title>Admin - CRUD Profesional UNEMI</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
     <header>
-        <div class="logo">
-            <i class="fa-solid fa-brain" style="color: #1a73e8;"></i>
-            <h1>Simulador <span class="subtitle">Académico</span></h1>
-        </div>
+        <div class="logo"><h1>Panel Admin <span class="subtitle">UNEMI</span></h1></div>
         <button onclick="window.location.href='index.html'" class="btn-secondary">Volver al Simulador</button>
     </header>
 
     <div class="container" id="admin-main" style="max-width: 800px; margin-top: 100px;">
-        <div class="admin-tabs">
-            <button onclick="changeTab('tab-excel')" class="btn-secondary active">Cargar Excel</button>
-            <button onclick="changeTab('tab-users')" class="btn-secondary">Gestionar Alumnos</button>
-        </div>
+        <nav style="display:flex; justify-content:center; gap:10px; margin-bottom:20px;">
+            <button onclick="changeTab('tab-excel')" class="btn-secondary">Excel</button>
+            <button onclick="changeTab('tab-users')" class="btn-secondary">Alumnos</button>
+        </nav>
 
         <div id="tab-excel">
-            <h3>Carga de Preguntas</h3>
+            <h3>Carga Masiva</h3>
             <input type="file" id="upload-excel" accept=".xlsx">
             <button id="btn-save-excel" class="btn-primary">Subir a Firebase</button>
         </div>
 
         <div id="tab-users" class="hidden">
             <h3>Gestión de Alumnos (CRUD)</h3>
-            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                <input type="email" id="edit-email" placeholder="correo@unemi.edu.ec">
-                <select id="edit-limit" style="margin: 10px 0; width: 100%;">
-                    <option value="1">1 Dispositivo</option>
-                    <option value="2">2 Dispositivos</option>
-                </select>
-                <button id="btn-update-user" class="btn-primary">Guardar / Actualizar Alumno</button>
+            <div style="background:#f8f9fa; padding:15px; border-radius:8px; margin-bottom:20px;">
+                <input type="email" id="edit-email" placeholder="correo@unemi.edu.ec" style="width:100%; padding:10px; margin-bottom:10px;">
+                <select id="edit-limit" style="width:100%; padding:10px;"><option value="1">1 Disp.</option><option value="2">2 Disp.</option></select>
+                <button id="btn-update-user" class="btn-primary">Guardar / Actualizar</button>
             </div>
-            
             <table>
                 <thead><tr><th>Correo</th><th>Disp.</th><th>Acción</th></tr></thead>
-                <tbody id="user-table-body">
-                    </tbody>
+                <tbody id="user-table-body"></tbody>
             </table>
         </div>
     </div>
@@ -59,57 +51,39 @@
             const body = document.getElementById('user-table-body');
             body.innerHTML = "";
             const snap = await getDocs(collection(db, "settings_usuarios"));
-            
-            // VALIDACIÓN: Si no hay usuarios registrados
-            if (snap.empty) {
-                body.innerHTML = "<tr><td colspan='3' style='text-align:center;'>No existen usuarios registrados.</td></tr>";
-                return;
-            }
-
+            if (snap.empty) { body.innerHTML = "<tr><td colspan='3'>No existen usuarios registrados.</td></tr>"; return; }
             snap.forEach(d => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${d.id}</td><td>${d.data().max_dispositivos}</td>
-                    <td>
-                        <button onclick="window.prepareEdit('${d.id}', ${d.data().max_dispositivos})" class="btn-edit">✏️</button>
-                        <button onclick="window.confirmDelete('${d.id}')" class="btn-delete">🗑️</button>
-                    </td>`;
+                tr.innerHTML = `<td>${d.id}</td><td>${d.data().max_dispositivos}</td><td>
+                    <button onclick="prepareEdit('${d.id}', ${d.data().max_dispositivos})" class="btn-edit">✏️</button>
+                    <button onclick="confirmDelete('${d.id}')" class="btn-delete">🗑️</button></td>`;
                 body.appendChild(tr);
             });
         }
 
-        window.prepareEdit = (email, limit) => {
-            document.getElementById('edit-email').value = email;
-            document.getElementById('edit-limit').value = limit;
-        };
+        window.prepareEdit = (email, limit) => { document.getElementById('edit-email').value = email; document.getElementById('edit-limit').value = limit; };
 
-        // SEGURIDAD: Confirmación para borrar
-        window.confirmDelete = async (email) => {
-            if (!email) {
-                alert("no existen usuarios para eliminar");
-                return;
-            }
-            if (confirm("¿está seguro de borrar al usuario?")) {
-                await deleteDoc(doc(db, "settings_usuarios", email));
-                alert("Usuario eliminado.");
-                loadUsers();
-            }
-        };
-
-        // SEGURIDAD: Confirmación para actualizar
+        // ACTUALIZAR CON CONFIRMACIÓN
         document.getElementById('btn-update-user').onclick = async () => {
             const email = document.getElementById('edit-email').value.trim().toLowerCase();
-            const limit = parseInt(document.getElementById('edit-limit').value);
+            if (!email) { Swal.fire('Error', 'no existen usuarios para actualizar', 'warning'); return; }
             
-            if (!email) {
-                alert("no existen usuarios para actualizar");
-                return;
-            }
+            Swal.fire({ title: '¿Confirmar cambios?', text: '¿está seguro de que la información esta correcta?', icon: 'question', showCancelButton: true })
+            .then(async (res) => {
+                if (res.isConfirmed) {
+                    await setDoc(doc(db, "settings_usuarios", email), { max_dispositivos: parseInt(document.getElementById('edit-limit').value) });
+                    Swal.fire('Guardado', 'Cambios aplicados.', 'success'); loadUsers();
+                }
+            });
+        };
 
-            if (confirm("¿está seguro de que la información está correcta?")) {
-                await setDoc(doc(db, "settings_usuarios", email), { max_dispositivos: limit });
-                alert("Cambios guardados exitosamente.");
-                loadUsers();
-            }
+        // BORRAR CON CONFIRMACIÓN
+        window.confirmDelete = (email) => {
+            if (!email) { Swal.fire('Error', 'no existen usuarios para eliminar', 'warning'); return; }
+            Swal.fire({ title: '¿Eliminar usuario?', text: '¿está seguro de borrar al usuario?', icon: 'warning', showCancelButton: true })
+            .then(async (res) => {
+                if (res.isConfirmed) { await deleteDoc(doc(db, "settings_usuarios", email)); loadUsers(); }
+            });
         };
 
         window.changeTab = (id) => {
@@ -117,14 +91,6 @@
             document.getElementById('tab-users').classList.add('hidden');
             document.getElementById(id).classList.remove('hidden');
             if (id === 'tab-users') loadUsers();
-        };
-
-        // CARGA MASIVA EXITOSA
-        document.getElementById('btn-save-excel').onclick = async () => {
-            if (confirm("¿Confirma la carga masiva de estas preguntas?")) {
-                // Lógica de carga batch de Firebase
-                alert("Carga masiva completada."); //
-            }
         };
     </script>
 </body>
