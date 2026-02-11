@@ -6,7 +6,7 @@
     <title>Simulador Académico UNEMI</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
     <header>
@@ -14,40 +14,40 @@
             <i class="fa-solid fa-brain" style="color: #1a73e8;"></i>
             <h1>Simulador <span class="subtitle">Académico</span></h1>
         </div>
-        <div id="user-nav" class="hidden" style="display: flex; align-items: center; gap: 15px;">
-            <button id="header-btn-back" class="btn-back hidden"><i class="fas fa-arrow-left"></i> Volver al Menú</button>
-            <span id="user-info" style="font-weight: bold; color: #1a73e8;"></span>
+        <div id="user-display" class="hidden" style="display: flex; align-items: center; gap: 15px;">
+            <button id="btn-header-return" class="btn-back hidden"><i class="fas fa-arrow-left"></i> Volver al Menú</button>
+            <span id="user-info" style="font-weight: bold; color: #1a73e8; font-size: 0.9rem;"></span>
             <button id="btn-logout" class="btn-secondary">Cerrar Sesión</button>
         </div>
     </header>
 
     <div class="container" id="auth-screen">
         <h2>Bienvenido</h2>
-        <button id="btn-login" class="btn-primary">Acceder con Google</button>
+        <button id="btn-login" class="btn-primary" style="margin-top: 20px;">Acceder con Google</button>
     </div>
 
     <div class="container hidden" id="setup-screen">
-        <div class="control-group">
-            <label>Materia</label>
-            <select id="subject-select"></select>
+        <div style="text-align: left; margin-bottom: 15px;">
+            <label style="font-weight: bold; display: block; margin-bottom: 5px;">Materia</label>
+            <select id="subject-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;"></select>
         </div>
-        <div class="control-group">
-            <label>Modo</label>
-            <select id="mode-select">
+        <div style="text-align: left; margin-bottom: 20px;">
+            <label style="font-weight: bold; display: block; margin-bottom: 5px;">Modo</label>
+            <select id="mode-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
                 <option value="exam">📝 Examen (20 Preguntas)</option>
-                <option value="study">📚 Estudio (Banco de preguntas)</option>
+                <option value="study">📚 Estudio (Banco de peguntas)</option>
             </select>
         </div>
         <button id="btn-start" class="btn-primary" disabled>Selecciona una materia</button>
-        <p><a href="admin.html" class="link-admin">Panel Administrativo</a></p>
+        <p><a href="admin.html" style="font-size: 0.8rem; color: #888; text-decoration: none; margin-top: 15px; display: inline-block;">Panel Administrativo</a></p>
     </div>
 
     <div class="container hidden" id="quiz-screen">
-        <div id="quiz-header-info" style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
-            <div id="timer-display" style="font-weight: bold; color: #d93025;">00:00</div>
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+            <div id="timer-display" style="font-weight: bold; color: #d93025; font-size: 1.1rem;">00:00</div>
         </div>
-        <div id="question-text" style="text-align: left; font-weight: bold; margin-bottom: 20px;"></div>
-        <div id="options-container" class="options-box"></div>
+        <div id="question-text" style="font-weight: bold; text-align: left; margin-bottom: 20px; font-size: 1.1rem;"></div>
+        <div id="options-container"></div>
     </div>
 
     <script type="module" src="script.js"></script>
