@@ -58,3 +58,67 @@ th, td { padding: 12px; border-bottom: 1px solid #eee; font-size: 0.85rem; }
 th { color: #1a73e8; background: #f8f9fa; text-transform: uppercase; }
 .btn-edit { background: #fbbc04; padding: 6px; border-radius: 4px; border: none; cursor: pointer; margin-right: 5px; }
 .btn-delete { background: #ea4335; color: white; padding: 6px; border-radius: 4px; border: none; cursor: pointer; }
+
+/* OPCIONES DE PREGUNTAS */
+#options-container { display: flex; flex-direction: column; gap: 12px; }
+.option-button {
+    width: 100%;
+    padding: 15px;
+    text-align: left;
+    background: #f8f9fa;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.option-button:hover {
+    background: #e8f0fe;
+    border-color: #1a73e8;
+    transform: translateX(5px);
+}
+
+.option-letter {
+    background: #1a73e8;
+    color: white;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.option-button.selected {
+    background: #e8f0fe;
+    border-color: #1a73e8;
+    font-weight: 600;
+}
+
+.option-button.correct {
+    background: #e6f4ea;
+    border-color: #34a853;
+}
+
+.option-button.correct .option-letter {
+    background: #34a853;
+}
+
+.option-button.incorrect {
+    background: #fce8e6;
+    border-color: #ea4335;
+}
+
+.option-button.incorrect .option-letter {
+    background: #ea4335;
+}
+
+.option-button:disabled {
+    cursor: not-allowed;
+}
