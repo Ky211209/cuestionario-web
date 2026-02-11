@@ -1,1 +1,52 @@
-
+{
+  "materias": [
+    {
+      "id": "comp-forense",
+      "nombre": "Computación Forense",
+      "icono": "fa-microscope",
+      "color": "#1a73e8",
+      "archivo": "data/comp-forense.json",
+      "activa": true
+    },
+    {
+      "id": "deontologia",
+      "nombre": "Deontología",
+      "icono": "fa-scale-balanced",
+      "color": "#1a73e8",
+      "archivo": "data/deontologia.json",
+      "activa": true
+    },
+    {
+      "id": "auditoria-ti",
+      "nombre": "Auditoría de TI",
+      "icono": "fa-clipboard-check",
+      "color": "#1a73e8",
+      "archivo": "data/auditoria-ti.json",
+      "activa": true
+    },
+    {
+      "id": "emprendimiento",
+      "nombre": "Emprendimiento e Innovación",
+      "icono": "fa-lightbulb",
+      "color": "#1a73e8",
+      "archivo": "data/emprendimiento.json",
+      "activa": true
+    },
+    {
+      "id": "ia",
+      "nombre": "Inteligencia Artificial",
+      "icono": "fa-robot",
+      "color": "#1a73e8",
+      "archivo": "data/ia.json",
+      "activa": true
+    },
+    {
+      "id": "practicas-1",
+      "nombre": "Prácticas Laborales 1",
+      "icono": "fa-briefcase",
+      "color": "#1a73e8",
+      "archivo": "data/practicas-1.json",
+      "activa": true
+    }
+  ]
+}
