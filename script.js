@@ -190,20 +190,73 @@ function renderQuestion() {
         return;
     }
 
+    // Verificar si esta pregunta ya fue respondida
+    const yaRespondida = selectedAnswers[currentIndex] !== null;
+
     // Crear botones para cada opción
     question.opciones.forEach((opcion, index) => {
         const button = document.createElement('button');
         button.className = 'option-button';
         button.innerHTML = `<span class="option-letter">${String.fromCharCode(65 + index)}</span> ${opcion}`;
         
-        // Marcar si ya fue seleccionada
-        if (selectedAnswers[currentIndex] === index) {
+        // En modo estudio, si ya fue respondida, mostrar los colores
+        if (currentMode === "study" && yaRespondida) {
+            button.disabled = true;
+            if (index === question.respuesta) {
+                button.classList.add('correct');
+            } else if (index === selectedAnswers[currentIndex]) {
+                button.classList.add('incorrect');
+            }
+        } else if (selectedAnswers[currentIndex] === index) {
+            // Marcar si ya fue seleccionada (modo examen)
             button.classList.add('selected');
         }
         
         button.onclick = () => selectAnswer(index);
         optionsContainer.appendChild(button);
     });
+
+    // Mostrar feedback si ya fue respondida en modo estudio
+    if (currentMode === "study" && yaRespondida) {
+        const feedbackBox = document.createElement('div');
+        feedbackBox.id = 'feedback-box';
+        const correct = question.respuesta;
+        const userAnswer = selectedAnswers[currentIndex];
+        
+        feedbackBox.style.cssText = `
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: left;
+            background: ${userAnswer === correct ? '#e6f4ea' : '#fce8e6'};
+            border-left: 4px solid ${userAnswer === correct ? '#34a853' : '#ea4335'};
+        `;
+        
+        if (userAnswer === correct) {
+            feedbackBox.innerHTML = `
+                <p style="font-weight: bold; color: #34a853; margin-bottom: 8px;">
+                    <i class="fas fa-check-circle"></i> ¡Correcto!
+                </p>
+                <p style="color: #555; font-size: 0.95rem;">
+                    ${question.explicacion_correcta || 'Has seleccionado la respuesta correcta. ¡Excelente trabajo!'}
+                </p>
+            `;
+        } else {
+            feedbackBox.innerHTML = `
+                <p style="font-weight: bold; color: #ea4335; margin-bottom: 8px;">
+                    <i class="fas fa-times-circle"></i> Incorrecto
+                </p>
+                <p style="color: #555; font-size: 0.95rem; margin-bottom: 8px;">
+                    La respuesta correcta es: <strong>${String.fromCharCode(65 + correct)}) ${question.opciones[correct]}</strong>
+                </p>
+                <p style="color: #666; font-size: 0.9rem;">
+                    ${question.explicacion_correcta || 'Revisa el material de estudio para comprender mejor este tema.'}
+                </p>
+            `;
+        }
+        
+        optionsContainer.appendChild(feedbackBox);
+    }
 
     // Botones de navegación
     const navDiv = document.createElement('div');
@@ -261,7 +314,7 @@ function renderQuestion() {
 function selectAnswer(optionIndex) {
     const buttons = document.querySelectorAll('.option-button');
     
-    // Modo Estudio: mostrar retroalimentación inmediata
+    // Modo Estudio: mostrar retroalimentación visual sin alertas
     if (currentMode === "study") {
         const question = questions[currentIndex];
         const correct = question.respuesta;
@@ -277,14 +330,52 @@ function selectAnswer(optionIndex) {
         
         selectedAnswers[currentIndex] = optionIndex;
         
-        const isCorrect = optionIndex === correct;
-        Swal.fire({
-            icon: isCorrect ? 'success' : 'error',
-            title: isCorrect ? '¡Correcto!' : 'Incorrecto',
-            text: isCorrect ? 'Excelente, sigue así.' : `La respuesta correcta es: ${String.fromCharCode(65 + correct)}`,
-            confirmButtonColor: '#1a73e8',
-            timer: 2500
-        });
+        // Mostrar explicación debajo de las opciones
+        const optionsContainer = document.getElementById('options-container');
+        const existingFeedback = document.getElementById('feedback-box');
+        if (existingFeedback) existingFeedback.remove();
+        
+        const feedbackBox = document.createElement('div');
+        feedbackBox.id = 'feedback-box';
+        feedbackBox.style.cssText = `
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: left;
+            background: ${optionIndex === correct ? '#e6f4ea' : '#fce8e6'};
+            border-left: 4px solid ${optionIndex === correct ? '#34a853' : '#ea4335'};
+        `;
+        
+        if (optionIndex === correct) {
+            feedbackBox.innerHTML = `
+                <p style="font-weight: bold; color: #34a853; margin-bottom: 8px;">
+                    <i class="fas fa-check-circle"></i> ¡Correcto!
+                </p>
+                <p style="color: #555; font-size: 0.95rem;">
+                    ${question.explicacion_correcta || 'Has seleccionado la respuesta correcta. ¡Excelente trabajo!'}
+                </p>
+            `;
+        } else {
+            feedbackBox.innerHTML = `
+                <p style="font-weight: bold; color: #ea4335; margin-bottom: 8px;">
+                    <i class="fas fa-times-circle"></i> Incorrecto
+                </p>
+                <p style="color: #555; font-size: 0.95rem; margin-bottom: 8px;">
+                    La respuesta correcta es: <strong>${String.fromCharCode(65 + correct)}) ${question.opciones[correct]}</strong>
+                </p>
+                <p style="color: #666; font-size: 0.9rem;">
+                    ${question.explicacion_correcta || 'Revisa el material de estudio para comprender mejor este tema.'}
+                </p>
+            `;
+        }
+        
+        // Insertar antes de los botones de navegación
+        const navButtons = optionsContainer.querySelector('div[style*="justify-content: space-between"]');
+        if (navButtons) {
+            optionsContainer.insertBefore(feedbackBox, navButtons);
+        } else {
+            optionsContainer.appendChild(feedbackBox);
+        }
         
     } else {
         // Modo Examen: solo marcar selección
