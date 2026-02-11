@@ -8,30 +8,31 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-// VARIABLES GLOBALES
-let questions = [];
-let currentIndex = 0;
-let currentMateria = "";
-let currentMode = "";
-
-// --- SEGURIDAD: CONFIRMACIÓN AL CERRAR SESIÓN ---
-document.getElementById('btn-logout').onclick = () => {
-    const mensaje = currentMode === "study" 
-        ? "¿Está seguro que desea salir? Su avance actual en Modo Estudio se guardará automáticamente." 
-        : "¿Está seguro que desea salir?";
-        
-    if (confirm(mensaje)) {
-        signOut(auth).then(() => location.reload());
-    }
-};
+const VIP = { "kholguinb2@unemi.edu.ec": 2, "iastudillol@unemi.edu.ec": 2, "naguilarb@unemi.edu.ec": 2, "csanchezl3@unemi.edu.ec": 1 };
+let currentMateria = "", currentMode = "", questions = [], currentIndex = 0;
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        document.getElementById('auth-screen').classList.add('hidden');
-        document.getElementById('setup-screen').classList.remove('hidden');
-        // Mostrar nombre y límite (2 Disp.) como en tu captura
-        document.getElementById('user-info').innerText = `${user.displayName.toUpperCase()} (2 Disp.)`;
-        cargarMaterias();
+        const email = user.email.toLowerCase();
+        let limit = VIP[email] || 0;
+        if (!limit) {
+            const snap = await getDoc(doc(db, "settings_usuarios", email));
+            if (snap.exists()) limit = snap.data().max_dispositivos;
+        }
+
+        if (limit > 0) {
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('setup-screen').classList.remove('hidden');
+            document.getElementById('user-display').classList.remove('hidden');
+            document.getElementById('user-info').innerText = `${user.displayName.toUpperCase()} (${limit} Disp.)`;
+            cargarMaterias();
+        } else {
+            Swal.fire('Acceso Denegado', 'No estás en la lista autorizada.', 'error');
+            signOut(auth);
+        }
+    } else {
+        document.getElementById('auth-screen').classList.remove('hidden');
+        document.getElementById('setup-screen').classList.add('hidden');
     }
 });
 
@@ -46,54 +47,46 @@ async function cargarMaterias() {
         select.appendChild(opt);
     });
 
-    // CORRECCIÓN: Asegurar que el botón se habilite al elegir materia
-    select.addEventListener('change', () => {
-        const btnStart = document.getElementById('btn-start');
-        btnStart.disabled = select.value === "";
-        btnStart.style.opacity = select.value === "" ? "0.5" : "1";
-    });
+    // FIX: Habilitar botón al seleccionar materia
+    select.onchange = () => {
+        const btn = document.getElementById('btn-start');
+        btn.disabled = select.value === "";
+        btn.style.opacity = select.value === "" ? "0.5" : "1";
+    };
 }
+
+document.getElementById('btn-logout').onclick = () => {
+    Swal.fire({
+        title: '¿Cerrar Sesión?',
+        text: "¿Está seguro que desea salir?",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#1a73e8',
+        confirmButtonText: 'Sí, salir'
+    }).then((result) => { if (result.isConfirmed) signOut(auth).then(() => location.reload()); });
+};
 
 document.getElementById('btn-start').onclick = async () => {
     currentMateria = document.getElementById('subject-select').value;
     currentMode = document.getElementById('mode-select').value;
-
-    // VALIDACIÓN: ¿Existen preguntas en Firebase?
     const snap = await getDocs(collection(db, `bancos_preguntas/${currentMateria}/preguntas`));
-    
+
     if (snap.empty) {
-        alert("Atención: No existen preguntas por el momento para esta materia.");
+        Swal.fire('Sin Contenido', 'No existen preguntas por el momento para esta materia.', 'info');
         return;
     }
 
-    questions = snap.docs.map(d => d.data());
-    
-    // GUARDADO AUTOMÁTICO: Recuperar avance en Modo Estudio
     if (currentMode === "study") {
-        const savedIndex = localStorage.getItem(`progreso_${currentMateria}`);
-        if (savedIndex && confirm("¿Desea retomar lo avanzado en esta materia?")) {
-            currentIndex = parseInt(savedIndex);
+        const saved = localStorage.getItem(`progreso_${currentMateria}`);
+        if (saved) {
+            const res = await Swal.fire({ title: 'Progreso detectado', text: '¿Deseas retomar lo avanzado?', icon: 'info', showCancelButton: true });
+            currentIndex = res.isConfirmed ? parseInt(saved) : 0;
         }
     }
 
     document.getElementById('setup-screen').classList.add('hidden');
     document.getElementById('quiz-screen').classList.remove('hidden');
-    renderQuestion();
-};
-
-function renderQuestion() {
-    // Lógica para mostrar la pregunta actual
-    // ...
-    // GUARDADO AUTOMÁTICO EN MODO ESTUDIO
-    if (currentMode === "study") {
-        localStorage.setItem(`progreso_${currentMateria}`, currentIndex);
-    }
-}
-
-document.getElementById('btn-return').onclick = () => {
-    if (confirm("¿Seguro que desea volver? Si está en Modo Estudio, su avance se guardará.")) {
-        location.reload();
-    }
+    // Lógica para renderizar pregunta...
 };
 
 document.getElementById('btn-login').onclick = () => signInWithPopup(auth, provider);
