@@ -104,6 +104,7 @@ th { color: #1a73e8; background: #f8f9fa; text-transform: uppercase; }
 .option-button.correct {
     background: #e6f4ea;
     border-color: #34a853;
+    animation: correctPulse 0.5s ease;
 }
 
 .option-button.correct .option-letter {
@@ -113,6 +114,7 @@ th { color: #1a73e8; background: #f8f9fa; text-transform: uppercase; }
 .option-button.incorrect {
     background: #fce8e6;
     border-color: #ea4335;
+    animation: incorrectShake 0.5s ease;
 }
 
 .option-button.incorrect .option-letter {
@@ -121,4 +123,36 @@ th { color: #1a73e8; background: #f8f9fa; text-transform: uppercase; }
 
 .option-button:disabled {
     cursor: not-allowed;
+}
+
+.option-button:disabled:hover {
+    transform: none;
+}
+
+/* FEEDBACK BOX */
+#feedback-box {
+    animation: slideDown 0.4s ease;
+}
+
+/* ANIMACIONES */
+@keyframes correctPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+}
+
+@keyframes incorrectShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
