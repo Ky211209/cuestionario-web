@@ -8,6 +8,16 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
+// Email del administrador autorizado (único con acceso al panel admin)
+const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
+
+// Usuarios con acceso permanente al simulador (2 dispositivos)
+const USUARIOS_PERMITIDOS = [
+    "kholguinb2@unemi.edu.ec",  // Administradora
+    "iastudillol@unemi.edu.ec",  // Usuario con acceso
+    "naguilarb@unemi.edu.ec"    // Usuario con acceso
+];
+
 let currentMateria = "", currentMode = "", questions = [], currentIndex = 0;
 let selectedAnswers = []; // Para guardar respuestas
 let timerInterval = null;
@@ -16,15 +26,49 @@ let startTime = null;
 // 1. MANEJO DE SESIÓN PERMANENTE
 onAuthStateChanged(auth, async (user) => {
     if (user) {
+        const userEmail = user.email.toLowerCase();
+        
+        // Verificar si el usuario tiene acceso permitido
+        const tieneAcceso = USUARIOS_PERMITIDOS.includes(userEmail);
+        
+        if (!tieneAcceso) {
+            // Verificar en Firebase si está autorizado
+            try {
+                const userDoc = await getDoc(doc(db, "usuarios_seguros", userEmail));
+                if (!userDoc.exists()) {
+                    // Usuario no autorizado
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'Acceso Denegado',
+                        text: 'No tienes autorización para usar este simulador. Contacta al administrador.',
+                        confirmButtonText: 'Entendido'
+                    });
+                    signOut(auth);
+                    return;
+                }
+            } catch (error) {
+                console.error('Error verificando usuario:', error);
+            }
+        }
+        
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('setup-screen').classList.remove('hidden');
         document.getElementById('user-display').classList.remove('hidden');
         document.getElementById('user-info').innerText = `${user.displayName.toUpperCase()} (2 Disp.)`;
+        
+        // Mostrar enlace de panel admin SOLO si es la administradora
+        if (userEmail === ADMIN_EMAIL) {
+            document.getElementById('admin-link-container').classList.remove('hidden');
+        } else {
+            document.getElementById('admin-link-container').classList.add('hidden');
+        }
+        
         cargarMaterias();
     } else {
         document.getElementById('auth-screen').classList.remove('hidden');
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('user-display').classList.add('hidden');
+        document.getElementById('admin-link-container').classList.add('hidden');
     }
 });
 
