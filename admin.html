@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Panel Admin - Carga Masiva</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="container" id="admin-access-denied">
+        <h2>Acceso Denegado</h2>
+        <p>Solo la administradora puede gestionar preguntas.</p>
+        <button onclick="window.location.href='index.html'">Volver</button>
+    </div>
+
+    <div class="container hidden" id="admin-panel">
+        <h2>Panel de Carga Masiva</h2>
+        <input type="file" id="upload-excel" accept=".xlsx, .xls, .csv">
+        <div id="preview-area" class="hidden">
+            <div id="stats-summary"></div>
+            <button id="btn-confirm-upload" class="btn-primary">Confirmar Guardado Inmediato</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getFirestore, writeBatch, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        const auth = getAuth();
+        const db = getFirestore();
+        const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
+
+        onAuthStateChanged(auth, (user) => {
+            if (user && user.email === ADMIN_EMAIL) {
+                document.getElementById('admin-access-denied').classList.add('hidden');
+                document.getElementById('admin-panel').classList.remove('hidden');
+            }
+        });
+
+        document.getElementById('upload-excel').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const workbook = XLSX.read(new Uint8Array(event.target.result), { type: 'array' });
+                window.datosCarga = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                document.getElementById('preview-area').classList.remove('hidden');
+                document.getElementById('stats-summary').innerText = `Se encontraron ${window.datosCarga.length} preguntas.`;
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        document.getElementById('btn-confirm-upload').addEventListener('click', async () => {
+            const batch = writeBatch(db);
+            window.datosCarga.forEach((p, i) => {
+                const ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${i}_${Date.now()}`);
+                batch.set(ref, {
+                    texto: p.texto,
+                    opciones: [p.opcion_0, p.opcion_1, p.opcion_2, p.opcion_3],
+                    respuesta: parseInt(p.respuesta),
+                    explicacion: p.explicacion
+                });
+            });
+            await batch.commit();
+            alert("Carga completada.");
+            location.reload();
+        });
+    </script>
+</body>
+</html>

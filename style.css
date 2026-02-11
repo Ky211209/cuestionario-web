@@ -1,0 +1,62 @@
+/* === DISEÑO UNIFICADO: ESTUDIANTE + ADMIN === */
+* { box-sizing: border-box; }
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #eff3f8; color: #444;
+    margin: 0; padding: 0; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+
+header {
+    width: 100%; padding: 10px 20px; background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1); position: fixed; top: 0;
+    display: flex; align-items: center; justify-content: space-between; z-index: 100;
+}
+
+.logo h1 { margin: 0; font-size: 1.1rem; color: #1a73e8; font-weight: 700; }
+.subtitle { color: #888; font-size: 0.8rem; margin-left: 5px; }
+
+.container {
+    width: 90%; max-width: 400px; background: #ffffff;
+    padding: 30px 25px; border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); text-align: center; margin-top: 60px;
+}
+
+.hidden { display: none; }
+
+/* BOTONES Y INPUTS */
+button {
+    width: 100%; padding: 10px; border: none; border-radius: 50px;
+    font-size: 0.95rem; font-weight: 600; cursor: pointer; margin-top: 8px; transition: 0.2s;
+}
+
+.btn-primary { background-color: #1877f2; color: white; }
+.btn-primary:hover { background-color: #166fe5; }
+.btn-secondary { background-color: #f1f3f4; color: #333; }
+
+input, select {
+    width: 100%; padding: 10px 15px; border: 1px solid #dadce0;
+    border-radius: 6px; margin-bottom: 15px;
+}
+
+/* FEEDBACK DE RESPUESTAS (Mismo de Seg. Informática) */
+.options-box button {
+    background: #fff; border: 1px solid #dadce0; border-radius: 8px;
+    padding: 10px 15px; margin-bottom: 8px; text-align: left;
+}
+
+.ans-correct {
+    background-color: #28a745 !important; color: white !important;
+    border: 2px solid #1e7e34 !important;
+}
+
+.ans-wrong {
+    background-color: #dc3545 !important; color: white !important;
+    border: 2px solid #bd2130 !important;
+}
+
+.explanation-feedback {
+    margin-top: 20px; padding: 15px; background-color: #f8f9fa;
+    border-left: 5px solid #1a73e8; text-align: left; font-size: 0.9rem;
+}

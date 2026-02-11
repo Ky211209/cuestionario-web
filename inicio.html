@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador Multi-Materia UNEMI</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <i class="fa-solid fa-brain" style="color: #1a73e8;"></i>
+            <h1>Simulador <span class="subtitle">Académico</span></h1>
+        </div>
+        <button id="btn-logout" class="btn-secondary hidden">Cerrar Sesión</button>
+    </header>
+
+    <div class="container" id="auth-screen">
+        <h2>Bienvenido</h2>
+        <button id="btn-google">Acceder con Google</button>
+    </div>
+
+    <div class="container hidden" id="setup-screen">
+        <div class="control-group">
+            <label>Materia</label>
+            <select id="subject-select">
+                <option value="">Cargando materias...</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>Modo</label>
+            <select id="mode-select">
+                <option value="exam">📝 Examen (20 Preguntas)</option>
+                <option value="study">📚 Estudio (Todo el banco)</option>
+            </select>
+        </div>
+        <button id="btn-start" class="btn-primary" disabled>Selecciona una materia</button>
+        <p><a href="admin.html" style="font-size: 0.8rem; color: #888;">Panel Admin</a></p>
+    </div>
+
+    <div class="container hidden" id="quiz-screen">
+        <div id="timer-display">00:00</div>
+        <div id="question-text"></div>
+        <div id="options-container" class="options-box"></div>
+        <button id="btn-next-question" class="btn-primary hidden">Siguiente</button>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
