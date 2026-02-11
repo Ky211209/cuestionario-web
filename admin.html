@@ -2,102 +2,101 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Panel Admin - UNEMI</title>
+    <title>Panel Admin - CRUD UNEMI</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <div class="container" id="admin-access-denied">
-        <h2>Área Restringida</h2>
-        <p>Solo la administradora principal puede acceder aquí.</p>
-        <button id="btn-auth-admin" class="btn-primary">Validar Identidad</button>
-        <p><a href="index.html" style="color:#888;">Volver</a></p>
-    </div>
+    <div class="container" id="admin-main" style="max-width: 700px;">
+        <nav style="display:flex; justify-content:center; gap:10px; margin-bottom:20px;">
+            <button onclick="changeTab('tab-excel')" class="btn-secondary">Cargar Excel</button>
+            <button onclick="changeTab('tab-users')" class="btn-secondary">Gestionar Alumnos</button>
+        </nav>
 
-    <div id="admin-main" class="hidden" style="width: 90%; max-width: 800px; margin-top: 50px;">
-        <div class="container" style="max-width:100%;">
-            <nav style="display:flex; gap:10px; margin-bottom:20px;">
-                <button onclick="showTab('tab-excel')" class="btn-secondary">Cargar Excel</button>
-                <button onclick="showTab('tab-users')" class="btn-secondary">Registrar Alumnos</button>
-            </nav>
+        <div id="tab-excel">
+            <h3>Carga Masiva de Preguntas</h3>
+            <input type="file" id="upload-excel" accept=".xlsx">
+            <button id="btn-save-excel" class="btn-primary">Subir Banco a Firebase</button>
+        </div>
 
-            <div id="tab-excel">
-                <h3><i class="fas fa-file-excel"></i> Subir Preguntas</h3>
-                <input type="file" id="upload-excel" accept=".xlsx">
-                <div id="preview" class="hidden">
-                    <p id="stats"></p>
-                    <button id="btn-save-excel" class="btn-primary">Subir a Firebase</button>
-                </div>
-            </div>
-
-            <div id="tab-users" class="hidden">
-                <h3><i class="fas fa-user-plus"></i> Lista Blanca de Alumnos</h3>
-                <input type="email" id="new-user-email" placeholder="estudiante@unemi.edu.ec">
-                <select id="new-user-limit" style="margin-top:10px;">
+        <div id="tab-users" class="hidden">
+            <h3>Gestión de Alumnos (Lista Blanca)</h3>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                <input type="email" id="edit-email" placeholder="correo@unemi.edu.ec">
+                <select id="edit-limit" style="margin: 10px 0; width: 100%;">
                     <option value="1">1 Dispositivo</option>
                     <option value="2">2 Dispositivos</option>
                 </select>
-                <button id="btn-save-user" class="btn-primary">Autorizar Estudiante</button>
+                <button id="btn-update-user" class="btn-primary">Guardar / Actualizar Alumno</button>
             </div>
+            
+            <table>
+                <thead>
+                    <tr><th>Correo</th><th>Disp.</th><th>Acción</th></tr>
+                </thead>
+                <tbody id="user-table-body"></tbody>
+            </table>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
         const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
         const db = getFirestore(app);
-        const ADMIN_TOTAL = "kholguinb2@unemi.edu.ec";
 
-        onAuthStateChanged(auth, (user) => {
-            if (user && user.email === ADMIN_TOTAL) {
-                document.getElementById('admin-access-denied').classList.add('hidden');
-                document.getElementById('admin-main').classList.remove('hidden');
-            } else if(user) { alert("No tienes permisos."); }
-        });
+        // FUNCIÓN PARA REFRESCAR LA TABLA (READ)
+        async function loadUsers() {
+            const body = document.getElementById('user-table-body');
+            body.innerHTML = "";
+            const snap = await getDocs(collection(db, "settings_usuarios"));
+            snap.forEach(d => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${d.id}</td>
+                    <td>${d.data().max_dispositivos}</td>
+                    <td>
+                        <button onclick="prepareEdit('${d.id}', ${d.data().max_dispositivos})" class="btn-edit">✏️</button>
+                        <button onclick="deleteUser('${d.id}')" class="btn-delete">🗑️</button>
+                    </td>
+                `;
+                body.appendChild(tr);
+            });
+        }
 
-        document.getElementById('btn-auth-admin').onclick = () => signInWithPopup(auth, new GoogleAuthProvider());
+        // CARGAR DATOS AL FORMULARIO (UPDATE)
+        window.prepareEdit = (email, limit) => {
+            document.getElementById('edit-email').value = email;
+            document.getElementById('edit-limit').value = limit;
+        };
 
-        window.showTab = (id) => {
+        // ELIMINAR (DELETE)
+        window.deleteUser = async (email) => {
+            if(confirm("¿Eliminar acceso de este alumno?")) {
+                await deleteDoc(doc(db, "settings_usuarios", email));
+                loadUsers();
+            }
+        };
+
+        // GUARDAR O ACTUALIZAR (CREATE/UPDATE)
+        document.getElementById('btn-update-user').onclick = async () => {
+            const email = document.getElementById('edit-email').value.trim().toLowerCase();
+            const limit = parseInt(document.getElementById('edit-limit').value);
+            if(!email.includes("@unemi.edu.ec")) return alert("Ingresa un correo UNEMI.");
+            await setDoc(doc(db, "settings_usuarios", email), { max_dispositivos: limit });
+            alert("Usuario procesado correctamente.");
+            document.getElementById('edit-email').value = "";
+            loadUsers();
+        };
+
+        window.changeTab = (id) => {
             document.getElementById('tab-excel').classList.add('hidden');
             document.getElementById('tab-users').classList.add('hidden');
             document.getElementById(id).classList.remove('hidden');
-        };
-
-        // Lógica de Registro de Usuario
-        document.getElementById('btn-save-user').onclick = async () => {
-            const email = document.getElementById('new-user-email').value.trim().toLowerCase();
-            const limit = parseInt(document.getElementById('new-user-limit').value);
-            if(!email.includes("@unemi.edu.ec")) return alert("Correo UNEMI inválido.");
-            await setDoc(doc(db, "settings_usuarios", email), { max_dispositivos: limit, fecha: serverTimestamp() });
-            alert("Alumno autorizado correctamente.");
-        };
-
-        // Lógica de Excel
-        document.getElementById('upload-excel').onchange = (e) => {
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
-                window.dataExcel = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-                document.getElementById('preview').classList.remove('hidden');
-                document.getElementById('stats').innerText = `Encontradas ${window.dataExcel.length} preguntas.`;
-            };
-            reader.readAsArrayBuffer(e.target.files[0]);
-        };
-
-        document.getElementById('btn-save-excel').onclick = async () => {
-            const batch = writeBatch(db);
-            window.dataExcel.forEach((p, i) => {
-                const ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${i}`);
-                batch.set(ref, { texto: p.texto, opciones: [p.opcion_0, p.opcion_1, p.opcion_2, p.opcion_3], respuesta: parseInt(p.respuesta), explicacion: p.explicacion });
-            });
-            await batch.commit();
-            alert("Carga masiva finalizada.");
+            if(id === 'tab-users') loadUsers();
         };
     </script>
 </body>
