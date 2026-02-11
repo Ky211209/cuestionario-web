@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// Tu configuración de Firebase
+// Tu configuración real de Firebase
 const firebaseConfig = {
     apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y",
     authDomain: "autenticacion-8faac.firebaseapp.com",
@@ -16,58 +16,63 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-// CONFIGURACIÓN DE ACCESO VIP (QUEMADOS)
+// CONFIGURACIÓN VIP (QUEMADOS EN CÓDIGO)
 const USUARIOS_VIP = {
-    "kholguinb2@unemi.edu.ec": 2,  // Tú (Admin)
-    "iastudillol@unemi.edu.ec": 2, // 2 Dispositivos
-    "naguilarb@unemi.edu.ec": 2,   // 2 Dispositivos
-    "csanchezl3@unemi.edu.ec": 1   // Sánchez (Limitado a 1)
+    "kholguinb2@unemi.edu.ec": 2, // Admin Total
+    "iastudillol@unemi.edu.ec": 2, 
+    "naguilarb@unemi.edu.ec": 2,   
+    "csanchezl3@unemi.edu.ec": 1   // Sánchez solo 1
 };
 
-// Control de Sesión y Lista Blanca
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         const email = user.email.toLowerCase();
-        let limiteDispositivos = 0;
+        let limite = 0;
 
-        // 1. Verificar si está en la lista quemada
         if (USUARIOS_VIP[email] !== undefined) {
-            limiteDispositivos = USUARIOS_VIP[email];
+            limite = USUARIOS_VIP[email];
         } else {
-            // 2. Buscar en Firestore (Registrados por ti en el panel)
             const snap = await getDoc(doc(db, "settings_usuarios", email));
-            if (snap.exists()) {
-                limiteDispositivos = snap.data().max_dispositivos;
-            }
+            if (snap.exists()) limite = snap.data().max_dispositivos;
         }
 
-        if (limiteDispositivos > 0) {
-            iniciarSimuladorUI(user, limiteDispositivos);
+        if (limite > 0) {
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('setup-screen').classList.remove('hidden');
+            document.getElementById('user-display').classList.remove('hidden');
+            document.getElementById('user-info').innerText = `${user.displayName} (Límite: ${limite})`;
+            cargarMaterias();
         } else {
-            alert("ACCESO DENEGADO: Tu correo no está autorizado. Contacta a la administradora.");
+            alert("Acceso Denegado: No estás registrado en el sistema.");
             signOut(auth);
         }
     } else {
-        mostrarLoginUI();
+        document.getElementById('auth-screen').classList.remove('hidden');
+        document.getElementById('setup-screen').classList.add('hidden');
+        document.getElementById('user-display').classList.add('hidden');
     }
 });
 
-function iniciarSimuladorUI(user, limite) {
-    document.getElementById('auth-screen').classList.add('hidden');
-    document.getElementById('setup-screen').classList.remove('hidden');
-    document.getElementById('user-display').classList.remove('hidden');
-    document.getElementById('user-info').innerText = `${user.displayName} (${limite} Disp.)`;
-    cargarMaterias();
-}
+// VALIDACIÓN DE MATERIA VACÍA
+async function iniciarSimulador() {
+    const materiaId = document.getElementById('subject-select').value;
+    if (!materiaId) return;
 
-function mostrarLoginUI() {
-    document.getElementById('auth-screen').classList.remove('hidden');
+    // Consultamos si hay preguntas en Firebase para esta materia
+    const q = collection(db, `bancos_preguntas/${materiaId}/preguntas`);
+    const snap = await getDocs(q);
+
+    if (snap.empty) {
+        alert("Atención Estudiante: No existen preguntas cargadas por el momento para esta materia. Por favor, elige otra.");
+        return; // Detenemos el flujo aquí
+    }
+
+    // Si hay preguntas, procedemos a cambiar de pantalla
     document.getElementById('setup-screen').classList.add('hidden');
-    document.getElementById('user-display').classList.add('hidden');
-    document.getElementById('quiz-screen').classList.add('hidden');
+    document.getElementById('quiz-screen').classList.remove('hidden');
+    // ... aquí llamaría a tu función de mostrarPregunta()
 }
 
-// Cargar Materias desde el JSON
 async function cargarMaterias() {
     const res = await fetch('data/config-materias.json');
     const data = await res.json();
@@ -81,10 +86,15 @@ async function cargarMaterias() {
     });
 }
 
-// Eventos de Botones
 document.getElementById('btn-login').onclick = () => signInWithPopup(auth, provider);
 document.getElementById('btn-logout').onclick = () => signOut(auth);
+document.getElementById('btn-start').onclick = iniciarSimulador;
+document.getElementById('btn-return').onclick = () => {
+    if(confirm("¿Seguro que deseas volver a la selección de materias?")) {
+        document.getElementById('quiz-screen').classList.add('hidden');
+        document.getElementById('setup-screen').classList.remove('hidden');
+    }
+};
 document.getElementById('subject-select').onchange = (e) => {
     document.getElementById('btn-start').disabled = !e.target.value;
-    document.getElementById('btn-start').innerText = e.target.value ? "Empezar Prueba" : "Selecciona una materia";
 };
