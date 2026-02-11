@@ -31,8 +31,36 @@ onAuthStateChanged(auth, async (user) => {
 // 2. CARGAR MATERIAS Y ACTIVAR BOTÓN
 async function cargarMaterias() {
     try {
-        const res = await fetch('config-materias.json');
-        const data = await res.json();
+        // Intentar múltiples rutas posibles
+        const posiblesRutas = [
+            'config-materias.json',
+            './config-materias.json',
+            '/config-materias.json',
+            'data/config-materias.json',
+            './data/config-materias.json'
+        ];
+
+        let data = null;
+        let rutaExitosa = null;
+
+        for (const ruta of posiblesRutas) {
+            try {
+                const res = await fetch(ruta);
+                if (res.ok) {
+                    data = await res.json();
+                    rutaExitosa = ruta;
+                    console.log(`✅ Materias cargadas desde: ${ruta}`);
+                    break;
+                }
+            } catch (e) {
+                continue; // Intentar siguiente ruta
+            }
+        }
+
+        if (!data) {
+            throw new Error('No se encontró el archivo config-materias.json en ninguna ruta');
+        }
+
         const select = document.getElementById('subject-select');
         const btnStart = document.getElementById('btn-start');
 
@@ -57,7 +85,20 @@ async function cargarMaterias() {
         };
     } catch (error) {
         console.error('Error cargando materias:', error);
-        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo cargar la lista de materias.' });
+        Swal.fire({ 
+            icon: 'error', 
+            title: 'Error', 
+            html: `
+                <p>No se pudo cargar la lista de materias.</p>
+                <p style="font-size: 0.85rem; color: #666; margin-top: 10px;">
+                    Verifica que el archivo <code>config-materias.json</code> esté en la raíz del proyecto.
+                </p>
+                <p style="font-size: 0.8rem; color: #999; margin-top: 5px;">
+                    Error técnico: ${error.message}
+                </p>
+            `,
+            confirmButtonColor: '#1a73e8'
+        });
     }
 }
 
