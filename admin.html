@@ -2,62 +2,236 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Panel Admin - Gestión UNEMI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Administrativo - UNEMI</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
     <header>
-        <div class="logo"><h1>Panel Admin <span class="subtitle">UNEMI</span></h1></div>
-        <button onclick="window.location.href='index.html'" class="btn-secondary">Volver al Simulador</button>
+        <div class="logo">
+            <i class="fa-solid fa-shield-halved" style="color: #1a73e8;"></i>
+            <h1>Panel Admin <span class="subtitle">Gestión Académica</span></h1>
+        </div>
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <span id="admin-name" style="font-weight: bold; color: #1a73e8; font-size: 0.9rem;"></span>
+            <button onclick="window.location.href='index.html'" class="btn-secondary">
+                <i class="fas fa-home"></i> Volver al Simulador
+            </button>
+        </div>
     </header>
 
-    <div class="container" id="admin-main" style="max-width: 800px; margin-top: 100px;">
-        <div id="tab-excel">
-            <h3>Carga Masiva de Preguntas</h3>
-            <p style="font-size: 0.8rem; margin-bottom: 15px;">Asegúrate que el Excel tenga la columna <b>materia_id</b>.</p>
-            <input type="file" id="upload-excel" accept=".xlsx" style="margin-bottom: 20px;">
-            <button id="btn-save-excel" class="btn-primary">Subir a Firebase</button>
+    <div class="container" id="admin-panel" style="max-width: 850px; margin-top: 20px;">
+        <div class="admin-tabs" style="margin-bottom: 25px;">
+            <button onclick="changeTab('tab-excel')" id="btn-tab-excel" class="tab-btn active">Cargar Excel</button>
+            <button onclick="changeTab('tab-users')" id="btn-tab-users" class="tab-btn">Gestionar Alumnos</button>
+        </div>
+
+        <div id="tab-excel" class="tab-content">
+            <h3><i class="fas fa-file-excel"></i> Carga Masiva de Preguntas</h3>
+            <p style="font-size: 0.85rem; color: #666; margin: 15px 0;">
+                El sistema detectará la materia automáticamente usando la columna <strong>materia_id</strong>.
+            </p>
+            <div style="border: 2px dashed #ddd; padding: 30px; border-radius: 10px; background: #fafafa;">
+                <input type="file" id="upload-excel" accept=".xlsx" style="display: block; margin: 0 auto;">
+            </div>
+            <div id="preview-area" class="hidden" style="margin-top: 20px; padding: 15px; background: #e8f0fe; border-radius: 8px;">
+                <p id="stats-summary" style="font-weight: bold; color: #1a73e8;"></p>
+                <button id="btn-save-excel" class="btn-primary" style="margin-top: 10px;">Subir a Firebase</button>
+            </div>
+        </div>
+
+        <div id="tab-users" class="tab-content hidden">
+            <h3><i class="fas fa-users-cog"></i> Gestión de Alumnos (Lista Blanca)</h3>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #eee;">
+                <input type="email" id="edit-email" placeholder="estudiante@unemi.edu.ec" style="margin-bottom: 10px;">
+                <select id="edit-limit" style="margin-bottom: 15px;">
+                    <option value="1">1 Dispositivo Autorizado</option>
+                    <option value="2">2 Dispositivos Autorizados</option>
+                </select>
+                <button id="btn-update-user" class="btn-primary">Guardar / Actualizar Alumno</button>
+            </div>
+
+            <table id="user-table">
+                <thead>
+                    <tr>
+                        <th>CORREO ELECTRÓNICO</th>
+                        <th style="text-align:center;">DISP.</th>
+                        <th style="text-align:center;">ACCIONES</th>
+                    </tr>
+                </thead>
+                <tbody id="user-table-body">
+                    </tbody>
+            </table>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, writeBatch, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, deleteDoc, collection, getDocs, writeBatch, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-        const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
+        const firebaseConfig = { 
+            apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", 
+            authDomain: "autenticacion-8faac.firebaseapp.com", 
+            projectId: "autenticacion-8faac", 
+            storageBucket: "autenticacion-8faac.firebasestorage.app", 
+            appId: "1:939518706600:web:d28c3ec7de21da8379939d" 
+        };
         const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
         const db = getFirestore(app);
+        const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
 
-        let datosExcel = [];
+        let excelData = [];
 
-        document.getElementById('upload-excel').onchange = (e) => {
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
-                datosExcel = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-            };
-            reader.readAsArrayBuffer(e.target.files[0]);
+        // 1. CONTROL DE ACCESO Y CABECERA
+        onAuthStateChanged(auth, (user) => {
+            if (user && user.email === ADMIN_EMAIL) {
+                document.getElementById('admin-name').innerText = user.displayName.toUpperCase();
+                loadUsers();
+            } else if (user) {
+                Swal.fire('Acceso Restringido', 'No tienes permisos de administrador.', 'error')
+                    .then(() => signOut(auth).then(() => window.location.href = 'index.html'));
+            }
+        });
+
+        // 2. GESTIÓN DE PESTAÑAS
+        window.changeTab = (id) => {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(id).classList.remove('hidden');
+            document.getElementById('btn-' + id).classList.add('active');
+            if (id === 'tab-users') loadUsers();
         };
 
-        document.getElementById('btn-save-excel').onclick = async () => {
-            if(datosExcel.length === 0) {
-                Swal.fire('Atención', 'Primero selecciona un archivo Excel.', 'warning');
+        // 3. LÓGICA DE USUARIOS (CRUD)
+        async function loadUsers() {
+            const body = document.getElementById('user-table-body');
+            body.innerHTML = "<tr><td colspan='3'>Cargando base de datos...</td></tr>";
+            
+            try {
+                const snap = await getDocs(collection(db, "usuarios_seguros"));
+                if (snap.empty) {
+                    body.innerHTML = "<tr><td colspan='3' style='text-align:center; padding:20px; color:#999;'>No existen usuarios registrados actualmente.</td></tr>";
+                    return;
+                }
+                
+                body.innerHTML = "";
+                snap.forEach(d => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${d.id}</td>
+                        <td style="text-align:center;">${d.data().max_dispositivos}</td>
+                        <td style="text-align:center;">
+                            <button onclick="prepareEdit('${d.id}', ${d.data().max_dispositivos})" class="btn-edit" title="Modificar"><i class="fas fa-edit"></i></button>
+                            <button onclick="confirmDelete('${d.id}')" class="btn-delete" title="Borrar"><i class="fas fa-trash-alt"></i></button>
+                        </td>`;
+                    body.appendChild(tr);
+                });
+            } catch (e) {
+                Swal.fire('Error', 'No se pudo cargar la lista de usuarios.', 'error');
+            }
+        }
+
+        window.prepareEdit = (email, limit) => {
+            document.getElementById('edit-email').value = email;
+            document.getElementById('edit-limit').value = limit;
+            Swal.fire({ icon: 'info', title: 'Usuario cargado', text: 'Puedes modificar los datos en el formulario superior.', timer: 2000, showConfirmButton: false });
+        };
+
+        window.confirmDelete = async (email) => {
+            if (!email) {
+                Swal.fire('Error', 'No se ha seleccionado ningún usuario para eliminar.', 'warning');
                 return;
             }
 
-            Swal.fire({
-                title: 'Confirmar Carga',
-                text: `¿Deseas subir ${datosExcel.length} preguntas?`,
+            const result = await Swal.fire({
+                title: '¿Eliminar usuario?',
+                text: `¿Está seguro de borrar al usuario ${email}? Esta acción no se puede deshacer.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Sí, borrar usuario',
+                cancelButtonText: 'Cancelar'
+            });
+
+            if (result.isConfirmed) {
+                await deleteDoc(doc(db, "usuarios_seguros", email));
+                Swal.fire('Eliminado', 'El acceso ha sido revocado correctamente.', 'success');
+                loadUsers();
+            }
+        };
+
+        document.getElementById('btn-update-user').onclick = async () => {
+            const email = document.getElementById('edit-email').value.trim().toLowerCase();
+            const limit = parseInt(document.getElementById('edit-limit').value);
+
+            if (!email || !email.includes('@unemi.edu.ec')) {
+                Swal.fire('Error', 'Por favor, ingrese un correo institucional válido.', 'warning');
+                return;
+            }
+
+            const confirmUpdate = await Swal.fire({
+                title: 'Confirmar registro',
+                text: "¿Está seguro de que la información está correcta?",
                 icon: 'question',
                 showCancelButton: true,
-                confirmButtonText: 'Sí, subir'
-            }).then(async (result) => {
-                if (result.isConfirmed) {
+                confirmButtonColor: '#1a73e8',
+                confirmButtonText: 'Sí, guardar cambios'
+            });
+
+            if (confirmUpdate.isConfirmed) {
+                await setDoc(doc(db, "usuarios_seguros", email), { max_dispositivos: limit });
+                Swal.fire('¡Éxito!', 'Usuario guardado y autorizado.', 'success');
+                document.getElementById('edit-email').value = "";
+                loadUsers();
+            }
+        };
+
+        // 4. LÓGICA DE EXCEL (CARGA MASIVA)
+        document.getElementById('upload-excel').onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const data = new Uint8Array(ev.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                excelData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                
+                if (excelData.length > 0) {
+                    const materia = excelData[0].materia_id || "No detectada";
+                    document.getElementById('preview-area').classList.remove('hidden');
+                    document.getElementById('stats-summary').innerHTML = `
+                        <i class="fas fa-check-circle"></i> Archivo listo: Materia <u>${materia}</u> detectada con ${excelData.length} preguntas.`;
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        document.getElementById('btn-save-excel').onclick = async () => {
+            if (excelData.length === 0) return;
+
+            const confirmUpload = await Swal.fire({
+                title: '¿Confirmar carga masiva?',
+                text: `Se subirán ${excelData.length} preguntas a la base de datos oficial.`,
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, subir ahora'
+            });
+
+            if (confirmUpload.isConfirmed) {
+                Swal.fire({ title: 'Subiendo datos...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                
+                try {
                     const batch = writeBatch(db);
-                    datosExcel.forEach((p, i) => {
-                        // RUTA UNIFICADA: bancos_preguntas -> materia_id -> preguntas
+                    excelData.forEach((p, i) => {
+                        // RUTA OFICIAL: bancos_preguntas -> ID Materia -> preguntas -> ID Pregunta
                         const ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${i}`);
                         batch.set(ref, {
                             texto: p.texto,
@@ -67,9 +241,12 @@
                         });
                     });
                     await batch.commit();
-                    Swal.fire('¡Éxito!', 'Carga masiva completada correctamente.', 'success');
+                    Swal.fire('¡Carga Completada!', 'El banco de preguntas ha sido actualizado con éxito.', 'success')
+                        .then(() => location.reload());
+                } catch (err) {
+                    Swal.fire('Error', 'No se pudieron subir las preguntas. Verifique su conexión.', 'error');
                 }
-            });
+            }
         };
     </script>
 </body>
