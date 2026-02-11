@@ -153,7 +153,7 @@ document.getElementById('btn-start').onclick = async () => {
 
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('quiz-screen').classList.remove('hidden');
-        document.getElementById('btn-header-return').classList.remove('hidden');
+        document.getElementById('btn-header-return').classList.add('hidden'); // OCULTAR botón del header
         
         // MOSTRAR LA PRIMERA PREGUNTA
         renderQuestion();
@@ -184,9 +184,30 @@ function renderQuestion() {
     questionText.textContent = `${currentIndex + 1}. ${preguntaTexto}`;
     optionsContainer.innerHTML = '';
 
+    // AGREGAR BOTÓN "VOLVER AL MENÚ" VISIBLE
+    const menuButton = document.createElement('button');
+    menuButton.className = 'btn-back-menu';
+    menuButton.innerHTML = '<i class="fas fa-home"></i> Volver al Menú';
+    menuButton.onclick = () => {
+        Swal.fire({ 
+            title: '¿Volver al menú?', 
+            text: currentMode === "study" ? 'Tu progreso se guardará automáticamente.' : 'Perderás el progreso de este examen.',
+            icon: 'warning', 
+            showCancelButton: true,
+            confirmButtonColor: '#1a73e8',
+            confirmButtonText: 'Sí, volver'
+        }).then((res) => { 
+            if(res.isConfirmed) {
+                stopTimer();
+                location.reload(); 
+            }
+        });
+    };
+    optionsContainer.appendChild(menuButton);
+
     // Verificar que existan opciones
     if (!question.opciones || !Array.isArray(question.opciones)) {
-        optionsContainer.innerHTML = '<p style="color: red;">Error: Esta pregunta no tiene opciones válidas.</p>';
+        optionsContainer.innerHTML += '<p style="color: red;">Error: Esta pregunta no tiene opciones válidas.</p>';
         return;
     }
 
@@ -276,7 +297,7 @@ function renderQuestion() {
 
     const btnNext = document.createElement('button');
     btnNext.className = 'btn-primary';
-    btnNext.style.marginLeft = 'auto';
+    btnNext.style.cssText = 'margin-left: auto; font-size: 1.1rem; padding: 14px 28px;'; // MÁS GRANDE
     
     if (currentIndex === questions.length - 1) {
         btnNext.textContent = 'Finalizar';
