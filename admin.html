@@ -57,31 +57,211 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        onAuthStateChanged(auth, (user) => { if(user) document.getElementById('admin-name').innerText = user.displayName.toUpperCase(); });
+        // VALIDACIÓN DE ACCESO ADMINISTRATIVO - SOLO kholguinb2@unemi.edu.ec
+        const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
+
+        onAuthStateChanged(auth, (user) => { 
+            if(user) {
+                // Validar que el usuario sea el administrador autorizado
+                if(user.email.toLowerCase() !== ADMIN_EMAIL) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Acceso Denegado',
+                        text: 'No tienes permisos para acceder al Panel Administrativo.',
+                        confirmButtonText: 'Volver al Simulador'
+                    }).then(() => {
+                        signOut(auth).then(() => window.location.href = 'index.html');
+                    });
+                    return;
+                }
+                document.getElementById('admin-name').innerText = user.displayName.toUpperCase();
+            } else {
+                // Si no hay usuario autenticado, redirigir al login
+                window.location.href = 'index.html';
+            }
+        });
 
         // --- CARGA MASIVA ---
         let dataExcel = [];
+        
+        // Función para validar la estructura del Excel
+        function validarEstructuraExcel(data) {
+            if (!data || data.length === 0) {
+                return { valido: false, mensaje: 'El archivo está vacío.' };
+            }
+
+            // Campos requeridos en el orden correcto
+            const camposRequeridos = ['materia_id', 'texto', 'opcion_0', 'opcion_1', 'opcion_2', 'opcion_3', 'respuesta'];
+            
+            // Validar que todos los registros tengan todos los campos
+            for (let i = 0; i < data.length; i++) {
+                const registro = data[i];
+                
+                // Verificar que existan todos los campos requeridos
+                for (const campo of camposRequeridos) {
+                    if (!(campo in registro) || registro[campo] === undefined || registro[campo] === null || registro[campo] === '') {
+                        return { 
+                            valido: false, 
+                            mensaje: `Fila ${i + 2}: Falta el campo "${campo}" o está vacío.` 
+                        };
+                    }
+                }
+
+                // Validar que materia_id sea un string válido
+                if (typeof registro.materia_id !== 'string' || registro.materia_id.trim() === '') {
+                    return { 
+                        valido: false, 
+                        mensaje: `Fila ${i + 2}: El campo "materia_id" debe ser un texto válido.` 
+                    };
+                }
+
+                // Validar que texto sea un string no vacío
+                if (typeof registro.texto !== 'string' || registro.texto.trim() === '') {
+                    return { 
+                        valido: false, 
+                        mensaje: `Fila ${i + 2}: El campo "texto" de la pregunta está vacío.` 
+                    };
+                }
+
+                // Validar que todas las opciones sean strings no vacíos
+                for (let j = 0; j < 4; j++) {
+                    const opcion = registro[`opcion_${j}`];
+                    if (typeof opcion !== 'string' || opcion.trim() === '') {
+                        return { 
+                            valido: false, 
+                            mensaje: `Fila ${i + 2}: La opción ${j} está vacía o no es válida.` 
+                        };
+                    }
+                }
+
+                // Validar que respuesta sea un número entre 0 y 3
+                const respuesta = parseInt(registro.respuesta);
+                if (isNaN(respuesta) || respuesta < 0 || respuesta > 3) {
+                    return { 
+                        valido: false, 
+                        mensaje: `Fila ${i + 2}: El campo "respuesta" debe ser un número entre 0 y 3. Valor encontrado: ${registro.respuesta}` 
+                    };
+                }
+            }
+
+            return { valido: true, mensaje: 'Plantilla válida' };
+        }
+
         document.getElementById('upload-excel').onchange = (e) => {
+            const file = e.target.files[0];
+            
+            // Validar que sea un archivo Excel
+            if (!file.name.endsWith('.xlsx')) {
+                Swal.fire('Error', 'Solo se permiten archivos .xlsx', 'error');
+                e.target.value = '';
+                return;
+            }
+
             const reader = new FileReader();
             reader.onload = (ev) => {
-                const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
-                dataExcel = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                try {
+                    const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+                    const tempData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                    
+                    // Validar estructura
+                    const validacion = validarEstructuraExcel(tempData);
+                    
+                    if (!validacion.valido) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Plantilla Inválida',
+                            html: `<p>${validacion.mensaje}</p>
+                                   <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                                   <strong>Formato requerido:</strong><br>
+                                   - materia_id (texto)<br>
+                                   - texto (pregunta)<br>
+                                   - opcion_0, opcion_1, opcion_2, opcion_3 (respuestas)<br>
+                                   - respuesta (número 0-3)
+                                   </p>`,
+                            confirmButtonText: 'Entendido'
+                        });
+                        e.target.value = '';
+                        dataExcel = [];
+                        return;
+                    }
+                    
+                    // Si la validación es exitosa, guardar los datos
+                    dataExcel = tempData;
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Plantilla Válida!',
+                        text: `${dataExcel.length} pregunta(s) lista(s) para cargar.`,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } catch (error) {
+                    Swal.fire('Error', 'No se pudo leer el archivo. Verifica que sea un archivo Excel válido.', 'error');
+                    e.target.value = '';
+                    dataExcel = [];
+                }
             };
-            reader.readAsArrayBuffer(e.target.files[0]);
+            reader.readAsArrayBuffer(file);
         };
 
         document.getElementById('btn-save-excel').onclick = async () => {
-            if(dataExcel.length === 0) return Swal.fire('Error', 'Selecciona un archivo primero.', 'warning');
-            Swal.fire({ title: 'Confirmar Carga', text: `¿Deseas subir ${dataExcel.length} preguntas?`, icon: 'question', showCancelButton: true })
+            if(dataExcel.length === 0) {
+                return Swal.fire('Error', 'Primero debes seleccionar y validar un archivo Excel.', 'warning');
+            }
+            
+            // Validación adicional antes de confirmar
+            const validacion = validarEstructuraExcel(dataExcel);
+            if (!validacion.valido) {
+                return Swal.fire('Error', validacion.mensaje, 'error');
+            }
+
+            Swal.fire({ 
+                title: 'Confirmar Carga', 
+                html: `<p>¿Deseas subir <strong>${dataExcel.length}</strong> pregunta(s) a Firebase?</p>
+                       <p style="margin-top: 10px; font-size: 0.9em; color: #888;">
+                       Esta acción no se puede deshacer.
+                       </p>`,
+                icon: 'question', 
+                showCancelButton: true,
+                confirmButtonText: 'Sí, subir',
+                cancelButtonText: 'Cancelar'
+            })
             .then(async (r) => {
                 if(r.isConfirmed) {
-                    const batch = writeBatch(db);
-                    dataExcel.forEach((p, i) => {
-                        const ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${i}`);
-                        batch.set(ref, { texto: p.texto, opciones: [p.opcion_0, p.opcion_1, p.opcion_2, p.opcion_3], respuesta: parseInt(p.respuesta) });
-                    });
-                    await batch.commit();
-                    Swal.fire('¡Éxito!', 'Carga completada profesionalmente.', 'success').then(() => location.reload());
+                    try {
+                        const batch = writeBatch(db);
+                        dataExcel.forEach((p, i) => {
+                            const ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${i}`);
+                            batch.set(ref, { 
+                                texto: p.texto.trim(), 
+                                opciones: [
+                                    p.opcion_0.trim(), 
+                                    p.opcion_1.trim(), 
+                                    p.opcion_2.trim(), 
+                                    p.opcion_3.trim()
+                                ], 
+                                respuesta: parseInt(p.respuesta) 
+                            });
+                        });
+                        await batch.commit();
+                        
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Éxito!',
+                            text: 'Preguntas cargadas correctamente en Firebase.',
+                            confirmButtonText: 'Aceptar'
+                        }).then(() => {
+                            dataExcel = [];
+                            document.getElementById('upload-excel').value = '';
+                        });
+                    } catch (error) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error al cargar',
+                            text: 'Hubo un problema al subir las preguntas a Firebase.',
+                            confirmButtonText: 'Aceptar'
+                        });
+                        console.error('Error:', error);
+                    }
                 }
             });
         };
