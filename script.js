@@ -297,7 +297,7 @@ function renderQuestion() {
 
     const btnNext = document.createElement('button');
     btnNext.className = 'btn-primary';
-    btnNext.style.cssText = 'margin-left: auto; font-size: 1.1rem; padding: 14px 28px;'; // MÁS GRANDE
+    btnNext.style.cssText = 'margin-left: auto;'; // Solo alineación
     
     if (currentIndex === questions.length - 1) {
         btnNext.textContent = 'Finalizar';
