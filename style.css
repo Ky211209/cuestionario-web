@@ -55,8 +55,67 @@ input, select {
     background-color: #dc3545 !important; color: white !important;
     border: 2px solid #bd2130 !important;
 }
+/* --- Estilos para el Nuevo Menú de Administración --- */
+.admin-nav-container {
+    background-color: var(--primary-color); /* Usa tu azul institucional */
+    padding: 1rem;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    margin-bottom: 2rem;
+    border-radius: 8px;
+}
+
+.admin-menu {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.admin-menu li button {
+    background: none;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 10px 20px;
+    font-size: 1rem;
+    cursor: pointer;
+    border-radius: 25px;
+    transition: all 0.3s ease;
+}
+
+.admin-menu li button:hover,
+.admin-menu li button.active {
+    background-color: white;
+    color: var(--primary-color);
+    border-color: white;
+    font-weight: bold;
+}
+
+/* Estilos para el formulario de crear usuario */
+.user-form-group {
+    margin-bottom: 1.5rem;
+    text-align: left;
+}
+
+.user-form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+.user-form-group input,
+.user-form-group select {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 1rem;
+}
 
 .explanation-feedback {
     margin-top: 20px; padding: 15px; background-color: #f8f9fa;
     border-left: 5px solid #1a73e8; text-align: left; font-size: 0.9rem;
+
 }
