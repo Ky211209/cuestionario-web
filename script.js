@@ -179,8 +179,16 @@ function renderQuestion() {
     const questionText = document.getElementById('question-text');
     const optionsContainer = document.getElementById('options-container');
     
-    questionText.textContent = `${currentIndex + 1}. ${question.texto || question.explicacion}`;
+    // Manejar diferentes estructuras de datos (texto, explicacion, o pregunta)
+    const preguntaTexto = question.texto || question.explicacion || question.pregunta || 'Pregunta sin texto';
+    questionText.textContent = `${currentIndex + 1}. ${preguntaTexto}`;
     optionsContainer.innerHTML = '';
+
+    // Verificar que existan opciones
+    if (!question.opciones || !Array.isArray(question.opciones)) {
+        optionsContainer.innerHTML = '<p style="color: red;">Error: Esta pregunta no tiene opciones válidas.</p>';
+        return;
+    }
 
     // Crear botones para cada opción
     question.opciones.forEach((opcion, index) => {
@@ -358,7 +366,7 @@ function mostrarResultadosDetallados(correctas) {
         `;
         
         resultCard.innerHTML = `
-            <p style="font-weight: bold; margin-bottom: 8px;">${idx + 1}. ${q.texto || q.explicacion}</p>
+            <p style="font-weight: bold; margin-bottom: 8px;">${idx + 1}. ${q.texto || q.explicacion || q.pregunta || 'Pregunta sin texto'}</p>
             <p style="color: #666; font-size: 0.9rem;">
                 Tu respuesta: <strong>${userAnswer !== null ? String.fromCharCode(65 + userAnswer) : 'Sin responder'}</strong><br>
                 Respuesta correcta: <strong>${String.fromCharCode(65 + q.respuesta)}</strong>
