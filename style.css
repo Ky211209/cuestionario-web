@@ -49,8 +49,34 @@ header {
 /* BOTONES */
 .btn-primary { background: #1a73e8; color: white; width: 100%; padding: 12px; border-radius: 50px; font-weight: 600; border: none; cursor: pointer; transition: 0.3s; }
 .btn-primary:disabled { background: #ccc !important; opacity: 0.5; cursor: not-allowed; }
-.btn-secondary { background: #e8f0fe; color: #1a73e8; padding: 8px 15px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer; }
-.btn-back { background: #5f6368; color: white; padding: 8px 15px; border-radius: 6px; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.btn-primary:hover:not(:disabled) { background: #1557b0; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(26, 115, 232, 0.3); }
+.btn-secondary { background: #e8f0fe; color: #1a73e8; padding: 8px 15px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer; transition: 0.3s; }
+.btn-secondary:hover { background: #d2e3fc; }
+.btn-back { background: #5f6368; color: white; padding: 8px 15px; border-radius: 6px; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.3s; }
+.btn-back:hover { background: #3c4043; }
+
+/* BOTÓN VOLVER AL MENÚ EN QUIZ */
+.btn-back-menu {
+    background: #ea4335;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+    font-size: 0.95rem;
+}
+
+.btn-back-menu:hover {
+    background: #d33426;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(234, 67, 53, 0.3);
+}
 
 /* TABLAS CRUD */
 table { width: 100%; border-collapse: collapse; margin-top: 20px; text-align: left; }
