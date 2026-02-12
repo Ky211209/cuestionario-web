@@ -25,9 +25,12 @@
         </nav>
 
         <div id="tab-excel">
-            <h3>Carga Masiva de Preguntas</h3>
+            <h3>Carga Masiva de Preguntas (Con Actualización Automática)</h3>
+            <p style="font-size: 0.85em; color: #666; margin-bottom: 10px;">
+                Si la pregunta ya existe, se actualizarán sus opciones y la <strong>explicación</strong>.
+            </p>
             <input type="file" id="upload-excel" accept=".xlsx" style="margin: 20px 0;">
-            <button id="btn-save-excel" class="btn-primary">Subir a Firebase</button>
+            <button id="btn-save-excel" class="btn-primary">Procesar y Sincronizar con Firebase</button>
         </div>
 
         <div id="tab-users" class="hidden">
@@ -50,355 +53,122 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, deleteDoc, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, deleteDoc, collection, getDocs, writeBatch, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // VALIDACIÓN DE ACCESO ADMINISTRATIVO - SOLO kholguinb2@unemi.edu.ec
         const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
 
         onAuthStateChanged(auth, (user) => { 
             if(user) {
-                // Validar que el usuario sea el administrador autorizado
                 if(user.email.toLowerCase() !== ADMIN_EMAIL) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Acceso Denegado',
-                        text: 'No tienes permisos para acceder al Panel Administrativo.',
-                        confirmButtonText: 'Volver al Simulador'
-                    }).then(() => {
+                    Swal.fire({ icon: 'error', title: 'Acceso Denegado' }).then(() => {
                         signOut(auth).then(() => window.location.href = 'index.html');
                     });
                     return;
                 }
                 document.getElementById('admin-name').innerText = user.displayName.toUpperCase();
             } else {
-                // Si no hay usuario autenticado, redirigir al login
                 window.location.href = 'index.html';
             }
         });
 
-        // --- CARGA MASIVA ---
         let dataExcel = [];
         
-        // Función para validar la estructura del Excel
         function validarEstructuraExcel(data) {
-            if (!data || data.length === 0) {
-                return { valido: false, mensaje: 'El archivo está vacío.' };
-            }
-
-            // Campos requeridos en el orden correcto
-            const camposRequeridos = ['materia_id', 'texto', 'opcion_0', 'opcion_1', 'opcion_2', 'opcion_3', 'respuesta'];
-            
-            // Validar que todos los registros tengan todos los campos
+            if (!data || data.length === 0) return { valido: false, mensaje: 'El archivo está vacío.' };
+            const requeridos = ['materia_id', 'texto', 'opcion_0', 'opcion_1', 'opcion_2', 'opcion_3', 'respuesta'];
             for (let i = 0; i < data.length; i++) {
-                const registro = data[i];
-                
-                // Verificar que existan todos los campos requeridos
-                for (const campo of camposRequeridos) {
-                    if (!(campo in registro) || registro[campo] === undefined || registro[campo] === null || registro[campo] === '') {
-                        return { 
-                            valido: false, 
-                            mensaje: `Fila ${i + 2}: Falta el campo "${campo}" o está vacío.` 
-                        };
+                for (const campo of requeridos) {
+                    if (!(campo in data[i]) || data[i][campo] === undefined || data[i][campo] === '') {
+                        return { valido: false, mensaje: `Fila ${i + 2}: Falta el campo "${campo}".` };
                     }
-                }
-
-                // Validar que materia_id sea un string válido
-                if (typeof registro.materia_id !== 'string' || registro.materia_id.trim() === '') {
-                    return { 
-                        valido: false, 
-                        mensaje: `Fila ${i + 2}: El campo "materia_id" debe ser un texto válido.` 
-                    };
-                }
-
-                // Validar que texto sea un string no vacío
-                if (typeof registro.texto !== 'string' || registro.texto.trim() === '') {
-                    return { 
-                        valido: false, 
-                        mensaje: `Fila ${i + 2}: El campo "texto" de la pregunta está vacío.` 
-                    };
-                }
-
-                // Validar que todas las opciones sean strings no vacíos
-                for (let j = 0; j < 4; j++) {
-                    const opcion = registro[`opcion_${j}`];
-                    if (typeof opcion !== 'string' || opcion.trim() === '') {
-                        return { 
-                            valido: false, 
-                            mensaje: `Fila ${i + 2}: La opción ${j} está vacía o no es válida.` 
-                        };
-                    }
-                }
-
-                // Validar que respuesta sea un número entre 0 y 3
-                const respuesta = parseInt(registro.respuesta);
-                if (isNaN(respuesta) || respuesta < 0 || respuesta > 3) {
-                    return { 
-                        valido: false, 
-                        mensaje: `Fila ${i + 2}: El campo "respuesta" debe ser un número entre 0 y 3. Valor encontrado: ${registro.respuesta}` 
-                    };
                 }
             }
-
-            return { valido: true, mensaje: 'Plantilla válida' };
+            return { valido: true };
         }
 
         document.getElementById('upload-excel').onchange = (e) => {
             const file = e.target.files[0];
-            
-            // Validar que sea un archivo Excel
-            if (!file.name.endsWith('.xlsx')) {
-                Swal.fire('Error', 'Solo se permiten archivos .xlsx', 'error');
-                e.target.value = '';
-                return;
-            }
-
             const reader = new FileReader();
             reader.onload = (ev) => {
                 try {
                     const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
                     const tempData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-                    
-                    // Validar estructura
-                    const validacion = validarEstructuraExcel(tempData);
-                    
-                    if (!validacion.valido) {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Plantilla Inválida',
-                            html: `<p>${validacion.mensaje}</p>
-                                   <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
-                                   <strong>Formato requerido:</strong><br>
-                                   - materia_id (texto)<br>
-                                   - texto (pregunta)<br>
-                                   - opcion_0, opcion_1, opcion_2, opcion_3 (respuestas)<br>
-                                   - respuesta (número 0-3)
-                                   </p>`,
-                            confirmButtonText: 'Entendido'
-                        });
+                    const val = validarEstructuraExcel(tempData);
+                    if (!val.valido) {
+                        Swal.fire('Error de Plantilla', val.mensaje, 'error');
                         e.target.value = '';
-                        dataExcel = [];
-                        return;
+                    } else {
+                        dataExcel = tempData;
+                        Swal.fire('Éxito', 'Archivo cargado y validado.', 'success');
                     }
-                    
-                    // Si la validación es exitosa, guardar los datos
-                    dataExcel = tempData;
-                    Swal.fire({
-                        icon: 'success',
-                        title: '¡Plantilla Válida!',
-                        text: `${dataExcel.length} pregunta(s) lista(s) para cargar.`,
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                } catch (error) {
-                    Swal.fire('Error', 'No se pudo leer el archivo. Verifica que sea un archivo Excel válido.', 'error');
-                    e.target.value = '';
-                    dataExcel = [];
+                } catch (err) {
+                    Swal.fire('Error', 'No se pudo leer el archivo.', 'error');
                 }
             };
             reader.readAsArrayBuffer(file);
         };
 
         document.getElementById('btn-save-excel').onclick = async () => {
-            if(dataExcel.length === 0) {
-                return Swal.fire('Error', 'Primero debes seleccionar y validar un archivo Excel.', 'warning');
-            }
-            
-            // Validación adicional antes de confirmar
-            const validacion = validarEstructuraExcel(dataExcel);
-            if (!validacion.valido) {
-                return Swal.fire('Error', validacion.mensaje, 'error');
-            }
+            if(dataExcel.length === 0) return Swal.fire('Error', 'Carga un archivo Excel primero.', 'warning');
 
-            // Mostrar loader mientras verifica duplicados
             Swal.fire({
-                title: 'Verificando preguntas...',
-                html: 'Buscando duplicados en la base de datos',
+                title: 'Sincronizando...',
+                text: 'Actualizando base de datos en Firebase',
                 allowOutsideClick: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
+                didOpen: () => { Swal.showLoading(); }
             });
 
             try {
-                // Agrupar preguntas por materia para verificar duplicados
-                const preguntasPorMateria = {};
-                dataExcel.forEach(p => {
-                    if (!preguntasPorMateria[p.materia_id]) {
-                        preguntasPorMateria[p.materia_id] = [];
-                    }
-                    preguntasPorMateria[p.materia_id].push(p);
-                });
-
-                // Verificar duplicados para cada materia
-                const preguntasNuevas = [];
-                const preguntasDuplicadas = [];
-                let totalExistentes = 0;
-
-                for (const materiaId in preguntasPorMateria) {
-                    // Obtener preguntas existentes en Firebase para esta materia
-                    const snapshot = await getDocs(collection(db, `bancos_preguntas/${materiaId}/preguntas`));
-                    const preguntasExistentes = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-
-                    // Comparar cada pregunta del Excel con las existentes
-                    preguntasPorMateria[materiaId].forEach((nuevaPregunta, index) => {
-                        const textoNuevo = nuevaPregunta.texto.trim().toLowerCase();
-                        
-                        // Buscar si ya existe una pregunta con el mismo texto
-                        const duplicado = preguntasExistentes.find(existente => 
-                            existente.texto.trim().toLowerCase() === textoNuevo
-                        );
-
-                        if (duplicado) {
-                            preguntasDuplicadas.push({
-                                fila: index + 2,
-                                texto: nuevaPregunta.texto,
-                                materia: materiaId
-                            });
-                        } else {
-                            preguntasNuevas.push(nuevaPregunta);
-                        }
-                    });
-                }
-
-                Swal.close();
-
-                // Si hay duplicados, mostrar reporte
-                if (preguntasDuplicadas.length > 0) {
-                    const listaDuplicados = preguntasDuplicadas
-                        .slice(0, 10) // Mostrar máximo 10
-                        .map(d => `• <strong>Fila ${d.fila}</strong> (${d.materia}): "${d.texto.substring(0, 50)}${d.texto.length > 50 ? '...' : ''}"`)
-                        .join('<br>');
-
-                    const masOcultos = preguntasDuplicadas.length > 10 
-                        ? `<p style="margin-top: 10px; font-size: 0.9em; color: #888;">...y ${preguntasDuplicadas.length - 10} más</p>` 
-                        : '';
-
-                    await Swal.fire({
-                        icon: 'warning',
-                        title: 'Preguntas Duplicadas Detectadas',
-                        html: `
-                            <div style="text-align: left;">
-                                <p><strong>${preguntasDuplicadas.length}</strong> pregunta(s) ya existe(n) en la base de datos.</p>
-                                <p><strong>${preguntasNuevas.length}</strong> pregunta(s) son nuevas y se pueden subir.</p>
-                                <hr style="margin: 15px 0;">
-                                <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">Preguntas duplicadas encontradas:</p>
-                                <div style="max-height: 200px; overflow-y: auto; font-size: 0.85em; color: #333;">
-                                    ${listaDuplicados}
-                                </div>
-                                ${masOcultos}
-                            </div>
-                        `,
-                        confirmButtonText: 'Entendido',
-                        width: '600px'
-                    });
-
-                    // Si hay preguntas nuevas, preguntar si desea subirlas
-                    if (preguntasNuevas.length > 0) {
-                        const confirmar = await Swal.fire({
-                            icon: 'question',
-                            title: '¿Subir solo las preguntas nuevas?',
-                            html: `
-                                <p>Se subirán <strong>${preguntasNuevas.length}</strong> pregunta(s) nueva(s).</p>
-                                <p style="font-size: 0.9em; color: #888; margin-top: 10px;">
-                                    Las ${preguntasDuplicadas.length} pregunta(s) duplicada(s) serán omitidas.
-                                </p>
-                            `,
-                            showCancelButton: true,
-                            confirmButtonText: 'Sí, subir nuevas',
-                            cancelButtonText: 'Cancelar'
-                        });
-
-                        if (!confirmar.isConfirmed) {
-                            return;
-                        }
-                    } else {
-                        // No hay preguntas nuevas
-                        return Swal.fire({
-                            icon: 'info',
-                            title: 'Sin Preguntas Nuevas',
-                            text: 'Todas las preguntas del archivo ya existen en la base de datos.',
-                            confirmButtonText: 'Entendido'
-                        });
-                    }
-                } else {
-                    // No hay duplicados, confirmar carga normal
-                    const confirmar = await Swal.fire({ 
-                        title: 'Confirmar Carga', 
-                        html: `<p>¿Deseas subir <strong>${preguntasNuevas.length}</strong> pregunta(s) nueva(s) a Firebase?</p>
-                               <p style="margin-top: 10px; font-size: 0.9em; color: #888;">
-                               No se encontraron preguntas duplicadas.
-                               </p>`,
-                        icon: 'question', 
-                        showCancelButton: true,
-                        confirmButtonText: 'Sí, subir',
-                        cancelButtonText: 'Cancelar'
-                    });
-
-                    if (!confirmar.isConfirmed) {
-                        return;
-                    }
-                }
-
-                // Subir solo las preguntas nuevas
-                Swal.fire({
-                    title: 'Subiendo preguntas...',
-                    html: `Guardando ${preguntasNuevas.length} pregunta(s) en Firebase`,
-                    allowOutsideClick: false,
-                    didOpen: () => {
-                        Swal.showLoading();
-                    }
-                });
-
                 const batch = writeBatch(db);
-                preguntasNuevas.forEach((p, i) => {
-                    const ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${i}`);
+                let nuevas = 0;
+                let actualizadas = 0;
+
+                for (const p of dataExcel) {
+                    const colRef = collection(db, `bancos_preguntas/${p.materia_id}/preguntas`);
+                    const q = query(colRef, where("texto", "==", p.texto.trim()));
+                    const snap = await getDocs(q);
+
+                    let ref;
+                    if (!snap.empty) {
+                        // Si existe, usamos el ID del documento encontrado para sobreescribirlo/actualizarlo
+                        ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, snap.docs[0].id);
+                        actualizadas++;
+                    } else {
+                        // Si no existe, creamos un ID nuevo
+                        ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`);
+                        nuevas++;
+                    }
+
                     batch.set(ref, { 
                         texto: p.texto.trim(), 
                         opciones: [
-                            p.opcion_0.trim(), 
-                            p.opcion_1.trim(), 
-                            p.opcion_2.trim(), 
-                            p.opcion_3.trim()
+                            p.opcion_0.toString().trim(), 
+                            p.opcion_1.toString().trim(), 
+                            p.opcion_2.toString().trim(), 
+                            p.opcion_3.toString().trim()
                         ], 
-                        respuesta: parseInt(p.respuesta) 
+                        respuesta: parseInt(p.respuesta),
+                        // ASIGNACIÓN CLAVE: Aquí tomamos 'explicacion' del Excel y lo guardamos como 'explicacion_correcta'
+                        explicacion_correcta: p.explicacion ? p.explicacion.toString().trim() : "Consulte el material de estudio oficial."
                     });
-                });
+                }
+
                 await batch.commit();
-                
-                Swal.fire({
-                    icon: 'success',
-                    title: '¡Éxito!',
-                    html: `
-                        <p><strong>${preguntasNuevas.length}</strong> pregunta(s) cargada(s) correctamente.</p>
-                        ${preguntasDuplicadas.length > 0 ? `<p style="font-size: 0.9em; color: #888; margin-top: 10px;">${preguntasDuplicadas.length} pregunta(s) duplicada(s) omitida(s).</p>` : ''}
-                    `,
-                    confirmButtonText: 'Aceptar'
-                }).then(() => {
-                    dataExcel = [];
-                    document.getElementById('upload-excel').value = '';
-                });
+                Swal.fire('Proceso Terminado', `Preguntas Nuevas: ${nuevas}<br>Preguntas Actualizadas: ${actualizadas}`, 'success');
+                dataExcel = [];
+                document.getElementById('upload-excel').value = '';
 
             } catch (error) {
-                Swal.close();
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error al procesar',
-                    text: 'Hubo un problema al verificar o subir las preguntas.',
-                    confirmButtonText: 'Aceptar'
-                });
-                console.error('Error:', error);
+                console.error(error);
+                Swal.fire('Error Crítico', 'No se pudo completar la sincronización.', 'error');
             }
         };
 
-        // --- CRUD USUARIOS ---
         async function loadUsers() {
             const body = document.getElementById('user-table-body');
             body.innerHTML = "";
@@ -418,21 +188,16 @@
         };
 
         window.confirmDelete = (email) => {
-            if(!email) return Swal.fire('Error', 'no existen usuarios para eliminar', 'warning');
-            Swal.fire({ title: '¿Borrar usuario?', text: '¿está seguro de borrar al usuario?', icon: 'warning', showCancelButton: true })
-            .then(async (r) => { if(r.isConfirmed) { await deleteDoc(doc(db, "usuarios_seguros", email)); loadUsers(); } });
+            Swal.fire({ title: '¿Eliminar usuario?', icon: 'warning', showCancelButton: true }).then(async (r) => {
+                if(r.isConfirmed) { await deleteDoc(doc(db, "usuarios_seguros", email)); loadUsers(); }
+            });
         };
 
         document.getElementById('btn-update-user').onclick = async () => {
             const email = document.getElementById('edit-email').value.trim().toLowerCase();
-            if(!email) return Swal.fire('Error', 'no existen usuarios para actualizar', 'warning');
-            Swal.fire({ title: 'Confirmar', text: '¿está seguro de que la información esta correcta?', icon: 'question', showCancelButton: true })
-            .then(async (r) => {
-                if(r.isConfirmed) {
-                    await setDoc(doc(db, "usuarios_seguros", email), { max_dispositivos: parseInt(document.getElementById('edit-limit').value) });
-                    Swal.fire('Éxito', 'Información actualizada.', 'success'); loadUsers();
-                }
-            });
+            if(!email) return;
+            await setDoc(doc(db, "usuarios_seguros", email), { max_dispositivos: parseInt(document.getElementById('edit-limit').value) });
+            Swal.fire('Éxito', 'Información actualizada.', 'success'); loadUsers();
         };
 
         window.changeTab = (id) => {
@@ -442,7 +207,7 @@
         };
 
         document.getElementById('btn-admin-logout').onclick = () => {
-            if(confirm("¿Desea cerrar sesión?")) signOut(auth).then(() => location.href='index.html');
+            if(confirm("¿Seguro que desea salir?")) signOut(auth).then(() => location.href='index.html');
         };
     </script>
 </body>
