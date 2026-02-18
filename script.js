@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
 const app = initializeApp(firebaseConfig);
@@ -8,6 +8,137 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
+// ================================================================
+// MÓDULO DE SEGURIDAD
+// ================================================================
+let currentUserEmail = "";
+let currentUserName = "";
+let watermarkElement = null;
+let contentHidden = false;
+
+// --- 1. MARCA DE AGUA DISCRETA ---
+function crearMarcaDeAgua(email) {
+    if (watermarkElement) watermarkElement.remove();
+    watermarkElement = document.createElement('div');
+    watermarkElement.id = 'security-watermark';
+    watermarkElement.innerText = `© ${email}`;
+    document.body.appendChild(watermarkElement);
+}
+
+function mostrarMarcaDeAgua() {
+    if (watermarkElement) watermarkElement.style.display = 'block';
+}
+
+function ocultarMarcaDeAgua() {
+    if (watermarkElement) watermarkElement.style.display = 'none';
+}
+
+// --- 2. LOG DE AUDITORÍA EN FIREBASE ---
+async function registrarAcceso(tipo, detalle = {}) {
+    if (!currentUserEmail) return;
+    try {
+        await addDoc(collection(db, "auditoria_accesos"), {
+            usuario: currentUserEmail,
+            nombre: currentUserName,
+            tipo,          // "inicio_sesion" | "ver_pregunta" | "perder_foco" | "pantalla_compartida"
+            timestamp: serverTimestamp(),
+            fecha_legible: new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }),
+            ...detalle
+        });
+    } catch (e) {
+        console.warn("Log de auditoría falló:", e);
+    }
+}
+
+// --- 3. OCULTAR CONTENIDO AL PERDER FOCO ---
+let overlayOcultar = null;
+
+function crearOverlay() {
+    if (overlayOcultar) return;
+    overlayOcultar = document.createElement('div');
+    overlayOcultar.id = 'security-overlay';
+    overlayOcultar.innerHTML = `
+        <div class="overlay-content">
+            <i class="fas fa-shield-alt" style="font-size: 2.5rem; color: #1a73e8; margin-bottom: 15px;"></i>
+            <p style="font-weight:bold; font-size:1.1rem;">Contenido Protegido</p>
+            <p style="color:#666; font-size:0.9rem; margin-top:8px;">Vuelve a esta pestaña para continuar.</p>
+        </div>`;
+    document.body.appendChild(overlayOcultar);
+}
+
+function mostrarOverlay(motivo) {
+    if (!overlayOcultar || contentHidden) return;
+    const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
+    if (!quizVisible) return; // Solo aplica durante el examen/estudio
+    contentHidden = true;
+    overlayOcultar.style.display = 'flex';
+    registrarAcceso('perder_foco', { motivo });
+}
+
+function ocultarOverlay() {
+    if (!overlayOcultar) return;
+    contentHidden = false;
+    overlayOcultar.style.display = 'none';
+}
+
+// Evento: cambio de visibilidad de pestaña
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        mostrarOverlay('cambio_pestaña');
+    } else {
+        ocultarOverlay();
+    }
+});
+
+// Evento: ventana pierde foco (Alt+Tab, minimizar)
+window.addEventListener('blur', () => mostrarOverlay('ventana_minimizada'));
+window.addEventListener('focus', () => ocultarOverlay());
+
+// --- 4. DETECCIÓN DE PANTALLA COMPARTIDA ---
+async function verificarPantallaCompartida() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) return;
+    // Monitorear si hay un stream de captura activo
+    // Usamos la API de Screen Capture para detectar si la pantalla está siendo grabada
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        // No hay forma directa de detectar grabación; usamos workaround con getDisplayMedia events
+    } catch(e) {}
+}
+
+// Interceptar clic derecho e inspeccionar (disuasivo)
+document.addEventListener('contextmenu', (e) => {
+    const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
+    if (quizVisible) {
+        e.preventDefault();
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acción Restringida',
+            text: 'El clic derecho está deshabilitado durante el simulador.',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }
+});
+
+// Atajos de teclado de inspeccionar / captura de pantalla
+document.addEventListener('keydown', (e) => {
+    const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
+    if (!quizVisible) return;
+    // F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
+    if (e.key === 'F12' || 
+        (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key)) ||
+        (e.ctrlKey && e.key === 'u')) {
+        e.preventDefault();
+        registrarAcceso('intento_inspeccionar', { tecla: e.key });
+    }
+    // PrintScreen
+    if (e.key === 'PrintScreen') {
+        registrarAcceso('intento_captura_pantalla');
+        navigator.clipboard.writeText('').catch(() => {}); // Limpiar portapapeles
+    }
+});
+
+// ================================================================
 // Email del administrador autorizado (único con acceso al panel admin)
 const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
 
@@ -55,6 +186,13 @@ onAuthStateChanged(auth, async (user) => {
             }
         }
         
+        // Inicializar módulo de seguridad
+        currentUserEmail = userEmail;
+        currentUserName = user.displayName || userEmail;
+        crearMarcaDeAgua(userEmail);
+        crearOverlay();
+        registrarAcceso('inicio_sesion');
+
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('setup-screen').classList.remove('hidden');
         document.getElementById('user-display').classList.remove('hidden');
@@ -238,6 +376,15 @@ function renderQuestion() {
     const questionText = document.getElementById('question-text');
     const optionsContainer = document.getElementById('options-container');
     
+    // Registrar en auditoría que se vio esta pregunta
+    registrarAcceso('ver_pregunta', {
+        materia: currentMateria,
+        modo: currentMode,
+        pregunta_num: currentIndex + 1,
+        pregunta_id: question.id,
+        pregunta_texto: (question.texto || '').substring(0, 80)
+    });
+
     // Manejar diferentes estructuras de datos (texto, explicacion, o pregunta)
     const preguntaTexto = question.texto || question.explicacion || question.pregunta || 'Pregunta sin texto';
     questionText.textContent = `${currentIndex + 1}. ${preguntaTexto}`;
