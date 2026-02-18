@@ -118,18 +118,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('blur', () => mostrarOverlay('ventana_minimizada'));
 window.addEventListener('focus', () => ocultarOverlay());
 
-// --- 4. DETECCIÓN DE PANTALLA COMPARTIDA ---
-async function verificarPantallaCompartida() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) return;
-    // Monitorear si hay un stream de captura activo
-    // Usamos la API de Screen Capture para detectar si la pantalla está siendo grabada
-    try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        // No hay forma directa de detectar grabación; usamos workaround con getDisplayMedia events
-    } catch(e) {}
-}
-
-// Interceptar clic derecho e inspeccionar (disuasivo)
+// --- 4. INTERCEPTAR CLIC DERECHO E INSPECCIONAR (disuasivo) ---
 document.addEventListener('contextmenu', (e) => {
     const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
     if (quizVisible) {
@@ -155,10 +144,15 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         registrarAcceso('intento_inspeccionar', { tecla: e.key });
     }
-    // PrintScreen
+    // PrintScreen: registrar intento y limpiar portapapeles si es posible
     if (e.key === 'PrintScreen') {
         registrarAcceso('intento_captura_pantalla');
-        navigator.clipboard.writeText('').catch(() => {}); // Limpiar portapapeles
+        // Intentar limpiar portapapeles (solo funciona si el usuario ya dio permiso de escritura)
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText('').catch(() => {
+                // Sin permiso de clipboard: se registra el intento pero no se puede vaciar
+            });
+        }
     }
 });
 
@@ -177,6 +171,8 @@ let currentMateria = "", currentMode = "", questions = [], currentIndex = 0;
 let selectedAnswers = []; // Para guardar respuestas
 let timerInterval = null;
 let startTime = null;
+let tiempoLimiteSegundos = 0;   // 0 = sin límite
+let tiempoRestante = 0;         // para cuenta regresiva
 
 // 1. MANEJO DE SESIÓN PERMANENTE
 onAuthStateChanged(auth, async (user) => {
@@ -304,6 +300,26 @@ async function cargarMaterias() {
                 btnStart.style.opacity = "1";
             }
         };
+
+        // Mostrar/ocultar selector de tiempo según modo seleccionado
+        const modeSelect = document.getElementById('mode-select');
+        const tiempoContainer = document.getElementById('tiempo-container');
+        const opcionSinLimite = document.getElementById('opcion-sin-limite');
+        const tiempoSelect = document.getElementById('tiempo-select');
+
+        modeSelect.onchange = () => {
+            if (modeSelect.value === 'study') {
+                // Modo estudio: mostrar "Sin límite" y seleccionarlo por defecto
+                opcionSinLimite.style.display = '';
+                tiempoSelect.value = '0';
+                tiempoContainer.style.display = 'block';
+            } else {
+                // Modo examen: ocultar "Sin límite", forzar selección válida
+                opcionSinLimite.style.display = 'none';
+                if (tiempoSelect.value === '0') tiempoSelect.value = '20';
+                tiempoContainer.style.display = 'block';
+            }
+        };
     } catch (error) {
         console.error('Error cargando materias:', error);
         Swal.fire({ 
@@ -327,6 +343,9 @@ async function cargarMaterias() {
 document.getElementById('btn-start').onclick = async () => {
     currentMateria = document.getElementById('subject-select').value;
     currentMode = document.getElementById('mode-select').value;
+    // Leer tiempo: en examen siempre será 15/20/30/60; en estudio puede ser 0 (sin límite)
+    const tiempoMinutos = parseInt(document.getElementById('tiempo-select').value) || 0;
+    tiempoLimiteSegundos = tiempoMinutos * 60;
 
     try {
         const snap = await getDocs(collection(db, `bancos_preguntas/${currentMateria}/preguntas`));
@@ -650,7 +669,17 @@ function finalizarExamen() {
         });
         
         const porcentaje = ((correctas / questions.length) * 100).toFixed(1);
-        const tiempo = document.getElementById('timer-display').textContent;
+        
+        // Calcular tiempo usado según modo
+        let tiempoTexto;
+        if (tiempoLimiteSegundos > 0) {
+            const usados = tiempoLimiteSegundos - tiempoRestante;
+            const min = Math.floor(usados / 60);
+            const seg = usados % 60;
+            tiempoTexto = `${String(min).padStart(2,'0')}:${String(seg).padStart(2,'0')} de ${tiempoLimiteSegundos/60} min`;
+        } else {
+            tiempoTexto = document.getElementById('timer-display').textContent;
+        }
         
         Swal.fire({
             icon: 'info',
@@ -659,7 +688,7 @@ function finalizarExamen() {
                 <p style="font-size: 1.1rem; margin: 15px 0;">
                     <strong>Respuestas correctas:</strong> ${correctas} / ${questions.length}<br>
                     <strong>Calificación:</strong> ${porcentaje}%<br>
-                    <strong>Tiempo:</strong> ${tiempo}
+                    <strong>Tiempo:</strong> ${tiempoTexto}
                 </p>
             `,
             confirmButtonColor: '#1a73e8',
@@ -721,16 +750,99 @@ function mostrarResultadosDetallados(correctas) {
     });
 }
 
-// 8. CRONÓMETRO
+// 8. CRONÓMETRO / CUENTA REGRESIVA
 function startTimer() {
-    startTime = Date.now();
-    timerInterval = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const minutes = Math.floor(elapsed / 60000);
-        const seconds = Math.floor((elapsed % 60000) / 1000);
-        document.getElementById('timer-display').textContent = 
-            `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    }, 1000);
+    const display = document.getElementById('timer-display');
+    const label   = document.getElementById('timer-label');
+
+    if (tiempoLimiteSegundos > 0) {
+        // ── CUENTA REGRESIVA ──────────────────────────────────────────
+        tiempoRestante = tiempoLimiteSegundos;
+        label.style.display = 'block';
+        label.textContent = 'Tiempo restante';
+        display.style.color = '#1a73e8';
+
+        function actualizarDisplay() {
+            const min = Math.floor(tiempoRestante / 60);
+            const seg = tiempoRestante % 60;
+            display.textContent = `${String(min).padStart(2,'0')}:${String(seg).padStart(2,'0')}`;
+
+            // Alertas visuales según tiempo restante
+            if (tiempoRestante <= 60) {
+                display.style.color = '#ea4335';    // rojo último minuto
+                display.style.animation = 'none';
+                if (tiempoRestante % 2 === 0) {     // parpadeo cada 2 seg
+                    display.style.opacity = '0.4';
+                } else {
+                    display.style.opacity = '1';
+                }
+            } else if (tiempoRestante <= 300) {
+                display.style.color = '#f29900';    // naranja últimos 5 min
+            } else {
+                display.style.color = '#1a73e8';
+            }
+        }
+
+        actualizarDisplay();
+
+        timerInterval = setInterval(() => {
+            tiempoRestante--;
+            actualizarDisplay();
+
+            // Avisos en momentos clave
+            if (tiempoRestante === 300) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '⏳ 5 minutos restantes',
+                    text: 'Ve terminando tus respuestas.',
+                    timer: 3000,
+                    showConfirmButton: false,
+                    toast: true,
+                    position: 'top-end'
+                });
+            } else if (tiempoRestante === 60) {
+                Swal.fire({
+                    icon: 'error',
+                    title: '🚨 ¡1 minuto!',
+                    text: 'El tiempo está por agotarse.',
+                    timer: 3000,
+                    showConfirmButton: false,
+                    toast: true,
+                    position: 'top-end'
+                });
+            } else if (tiempoRestante <= 0) {
+                clearInterval(timerInterval);
+                display.textContent = '00:00';
+                display.style.opacity = '1';
+                // Tiempo agotado → finalizar automáticamente
+                Swal.fire({
+                    icon: 'error',
+                    title: '⏰ ¡Tiempo agotado!',
+                    text: 'El tiempo límite ha terminado. Se enviarán tus respuestas automáticamente.',
+                    confirmButtonColor: '#ea4335',
+                    confirmButtonText: 'Ver resultados',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false
+                }).then(() => {
+                    finalizarExamen();
+                });
+            }
+        }, 1000);
+
+    } else {
+        // ── CRONÓMETRO (sin límite) ───────────────────────────────────
+        label.style.display = 'block';
+        label.textContent = 'Tiempo transcurrido';
+        display.style.color = '#d93025';
+        startTime = Date.now();
+
+        timerInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const minutes = Math.floor(elapsed / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            display.textContent = `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+        }, 1000);
+    }
 }
 
 function stopTimer() {
