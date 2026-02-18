@@ -198,3 +198,45 @@ th { color: #1a73e8; background: #f8f9fa; text-transform: uppercase; }
         transform: translateY(0);
     }
 }
+
+/* ================================================================
+   MÓDULO DE SEGURIDAD
+   ================================================================ */
+
+/* MARCA DE AGUA DISCRETA */
+#security-watermark {
+    position: fixed;
+    bottom: 8px;
+    right: 12px;
+    font-size: 0.70rem;
+    color: rgba(100, 100, 100, 0.45);
+    font-family: monospace;
+    pointer-events: none;
+    z-index: 9999;
+    user-select: none;
+    letter-spacing: 0.02em;
+}
+
+/* OVERLAY DE CONTENIDO OCULTO */
+#security-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(240, 242, 245, 0.97);
+    z-index: 9998;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(8px);
+}
+
+.overlay-content {
+    text-align: center;
+    padding: 40px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    max-width: 300px;
+}
