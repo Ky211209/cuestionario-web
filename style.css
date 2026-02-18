@@ -206,15 +206,16 @@ th { color: #1a73e8; background: #f8f9fa; text-transform: uppercase; }
 /* MARCA DE AGUA DISCRETA */
 #security-watermark {
     position: fixed;
-    bottom: 8px;
-    right: 12px;
-    font-size: 0.70rem;
-    color: rgba(100, 100, 100, 0.45);
-    font-family: monospace;
+    bottom: 12px;
+    right: 15px;
+    font-size: 0.72rem;
+    color: rgba(60, 60, 60, 0.55);
+    font-family: 'Courier New', monospace;
     pointer-events: none;
-    z-index: 9999;
+    z-index: 99999;
     user-select: none;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.03em;
+    background: transparent;
 }
 
 /* OVERLAY DE CONTENIDO OCULTO */
