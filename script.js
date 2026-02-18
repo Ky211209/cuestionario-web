@@ -22,6 +22,21 @@ function crearMarcaDeAgua(email) {
     watermarkElement = document.createElement('div');
     watermarkElement.id = 'security-watermark';
     watermarkElement.innerText = `© ${email}`;
+    // Estilos inline para evitar conflictos con cualquier CSS
+    watermarkElement.style.cssText = `
+        position: fixed !important;
+        bottom: 12px !important;
+        right: 15px !important;
+        font-size: 0.72rem !important;
+        color: rgba(60, 60, 60, 0.55) !important;
+        font-family: 'Courier New', monospace !important;
+        pointer-events: none !important;
+        z-index: 99999 !important;
+        user-select: none !important;
+        letter-spacing: 0.03em !important;
+        background: transparent !important;
+        display: block !important;
+    `;
     document.body.appendChild(watermarkElement);
 }
 
