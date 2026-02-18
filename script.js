@@ -301,23 +301,25 @@ async function cargarMaterias() {
             }
         };
 
-        // Mostrar/ocultar selector de tiempo según modo seleccionado
+        // Mostrar/ocultar opciones según modo seleccionado
         const modeSelect = document.getElementById('mode-select');
         const tiempoContainer = document.getElementById('tiempo-container');
+        const cantidadContainer = document.getElementById('cantidad-container');
         const opcionSinLimite = document.getElementById('opcion-sin-limite');
         const tiempoSelect = document.getElementById('tiempo-select');
 
         modeSelect.onchange = () => {
             if (modeSelect.value === 'study') {
-                // Modo estudio: mostrar "Sin límite" y seleccionarlo por defecto
+                // Modo Estudio: mostrar "Sin límite" y el selector de cantidad
                 opcionSinLimite.style.display = '';
-                tiempoSelect.value = '0';
-                tiempoContainer.style.display = 'block';
+                cantidadContainer.style.display = 'block';
+                // Si estaba en 20/30/60, dejar como está; no forzar sin-límite
             } else {
-                // Modo examen: ocultar "Sin límite", forzar selección válida
+                // Modo Examen: ocultar "Sin límite" y el selector de cantidad
                 opcionSinLimite.style.display = 'none';
+                cantidadContainer.style.display = 'none';
+                // Si tenía "sin límite" seleccionado, resetear a 20 min
                 if (tiempoSelect.value === '0') tiempoSelect.value = '20';
-                tiempoContainer.style.display = 'block';
             }
         };
     } catch (error) {
@@ -362,11 +364,21 @@ document.getElementById('btn-start').onclick = async () => {
 
         questions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         
-        // Mezclar preguntas si es modo examen
+        // Mezclar preguntas aleatoriamente
+        questions = questions.sort(() => Math.random() - 0.5);
+
         if (currentMode === "exam") {
-            questions = questions.sort(() => Math.random() - 0.5).slice(0, 20);
+            // MODO EXAMEN: siempre 20 preguntas aleatorias
+            questions = questions.slice(0, 20);
             selectedAnswers = new Array(questions.length).fill(null);
         } else {
+            // MODO ESTUDIO: 20 preguntas O todas, según lo que eligió el usuario
+            const cantidadSelect = document.getElementById('cantidad-select');
+            const cantidadElegida = cantidadSelect ? cantidadSelect.value : '20';
+            if (cantidadElegida !== 'todas') {
+                questions = questions.slice(0, 20);
+            }
+            // Si eligió "todas", se quedan todas las preguntas ya mezcladas
             selectedAnswers = new Array(questions.length).fill(null);
         }
 
@@ -386,6 +398,7 @@ document.getElementById('btn-start').onclick = async () => {
             } else { 
                 currentIndex = 0; 
             }
+            startTimer(); // Iniciar timer también en modo estudio (puede ser con límite o sin límite)
         } else { 
             currentIndex = 0; 
             startTimer();
