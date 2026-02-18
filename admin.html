@@ -7,25 +7,556 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        /* ============================================================
+           ESTILOS EXCLUSIVOS DEL PANEL ADMIN - CRUD PREGUNTAS
+           ============================================================ */
+
+        /* Navegación de tabs mejorada */
+        .admin-nav {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 9px 18px;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.25s;
+            background: #f0f2f5;
+            color: #5f6368;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+        .tab-btn:hover { background: #e8f0fe; color: #1a73e8; border-color: #c5d8fb; }
+        .tab-btn.active { background: #1a73e8; color: white; border-color: #1a73e8; box-shadow: 0 3px 10px rgba(26,115,232,0.35); }
+
+        /* ---- FILTROS CRUD ---- */
+        .crud-filtros {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 10px;
+            margin-bottom: 18px;
+            border: 1px solid #e8e8e8;
+        }
+        .crud-filtros .filtro-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+            min-width: 140px;
+        }
+        .crud-filtros label { font-size: 0.77rem; font-weight: 700; color: #5f6368; text-transform: uppercase; letter-spacing: 0.04em; }
+        .crud-filtros select,
+        .crud-filtros input[type="number"] {
+            padding: 9px 12px;
+            border-radius: 7px;
+            border: 1.5px solid #ddd;
+            font-size: 0.88rem;
+            background: white;
+            color: #333;
+            transition: border-color 0.2s;
+            width: 100%;
+        }
+        .crud-filtros select:focus,
+        .crud-filtros input:focus { border-color: #1a73e8; outline: none; }
+
+        /* ---- STATS BANNER ---- */
+        .stats-banner {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .stat-card {
+            flex: 1;
+            min-width: 110px;
+            background: white;
+            border: 1px solid #e8e8e8;
+            border-left: 4px solid #1a73e8;
+            border-radius: 8px;
+            padding: 10px 14px;
+            text-align: center;
+        }
+        .stat-card .stat-num { font-size: 1.6rem; font-weight: 800; color: #1a73e8; line-height: 1; }
+        .stat-card .stat-label { font-size: 0.73rem; color: #888; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.03em; }
+
+        /* ---- TABLA PREGUNTAS ---- */
+        #tabla-preguntas-wrap { overflow-x: auto; }
+
+        #tabla-preguntas {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.84rem;
+        }
+        #tabla-preguntas thead tr {
+            background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%);
+            color: white;
+        }
+        #tabla-preguntas th {
+            padding: 12px 14px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+        }
+        #tabla-preguntas td {
+            padding: 11px 14px;
+            border-bottom: 1px solid #f0f0f0;
+            vertical-align: top;
+            color: #333;
+        }
+        #tabla-preguntas tbody tr:hover { background: #f5f9ff; }
+        #tabla-preguntas tbody tr:nth-child(even) { background: #fafafa; }
+        #tabla-preguntas tbody tr:nth-child(even):hover { background: #f0f6ff; }
+
+        .num-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            background: #e8f0fe;
+            color: #1a73e8;
+            border-radius: 6px;
+            font-weight: 800;
+            font-size: 0.8rem;
+        }
+
+        .td-pregunta { max-width: 280px; }
+        .td-pregunta .pregunta-texto {
+            font-weight: 600;
+            color: #202124;
+            line-height: 1.4;
+            margin-bottom: 6px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .td-pregunta .opciones-mini {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .opcion-mini {
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border-left: 3px solid #ddd;
+            color: #666;
+            background: #fafafa;
+        }
+        .opcion-mini.correcta {
+            border-left-color: #34a853;
+            background: #e8f5ec;
+            color: #1e7e34;
+            font-weight: 600;
+        }
+
+        .td-explicacion { max-width: 200px; }
+        .explicacion-preview {
+            font-size: 0.78rem;
+            color: #666;
+            font-style: italic;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* ---- ACCIONES ---- */
+        .acciones-celda { white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+        .btn-accion {
+            border: none;
+            padding: 7px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.82rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-editar { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+        .btn-editar:hover { background: #ffc107; color: white; }
+        .btn-eliminar { background: #fce8e6; color: #c5221f; border: 1px solid #ea4335; }
+        .btn-eliminar:hover { background: #ea4335; color: white; }
+
+        /* ---- PAGINACIÓN ---- */
+        .paginacion {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .paginacion button {
+            padding: 7px 14px;
+            border-radius: 7px;
+            border: 1.5px solid #ddd;
+            background: white;
+            color: #444;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .paginacion button:hover:not(:disabled) { border-color: #1a73e8; color: #1a73e8; background: #e8f0fe; }
+        .paginacion button.activa { background: #1a73e8; color: white; border-color: #1a73e8; }
+        .paginacion button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .paginacion .info-pagina { font-size: 0.82rem; color: #666; padding: 0 8px; }
+
+        /* ---- BOTÓN NUEVA PREGUNTA ---- */
+        .btn-nueva-pregunta {
+            background: linear-gradient(135deg, #34a853, #2d8f47);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.88rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.25s;
+            box-shadow: 0 3px 10px rgba(52,168,83,0.3);
+        }
+        .btn-nueva-pregunta:hover { background: linear-gradient(135deg, #2d8f47, #1e6b35); transform: translateY(-1px); box-shadow: 0 5px 15px rgba(52,168,83,0.35); }
+
+        /* ---- MODAL EDICIÓN ---- */
+        #modal-pregunta-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.55);
+            z-index: 9990;
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        #modal-pregunta-overlay.visible { display: flex; }
+
+        #modal-pregunta {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 680px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+            animation: modalIn 0.3s ease;
+        }
+
+        @keyframes modalIn {
+            from { opacity: 0; transform: translateY(-20px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        .modal-header h3 { font-size: 1.15rem; color: #1a73e8; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .modal-close {
+            background: #f0f2f5;
+            border: none;
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .modal-close:hover { background: #ea4335; color: white; }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #444;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .form-group textarea,
+        .form-group input[type="text"],
+        .form-group select {
+            width: 100%;
+            padding: 10px 13px;
+            border-radius: 8px;
+            border: 1.5px solid #ddd;
+            font-size: 0.9rem;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.2s;
+            background: #fafafa;
+        }
+        .form-group textarea:focus,
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: #1a73e8;
+            background: white;
+            outline: none;
+        }
+
+        .opciones-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .opcion-input-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .opcion-letra {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #1a73e8;
+            color: white;
+            font-weight: 800;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .respuesta-selector {
+            display: flex;
+            gap: 10px;
+        }
+        .respuesta-opcion {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 9px;
+            border-radius: 8px;
+            border: 2px solid #ddd;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            background: #fafafa;
+        }
+        .respuesta-opcion:hover { border-color: #1a73e8; background: #e8f0fe; }
+        .respuesta-opcion.seleccionada { background: #34a853; border-color: #34a853; color: white; }
+        .respuesta-opcion .letra-resp {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 800;
+        }
+        .respuesta-opcion:not(.seleccionada) .letra-resp { background: #1a73e8; color: white; }
+
+        .modal-footer {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 2px solid #f0f0f0;
+        }
+        .btn-cancelar {
+            background: #f0f2f5;
+            color: #5f6368;
+            padding: 11px 22px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .btn-cancelar:hover { background: #e0e0e0; }
+        .btn-guardar {
+            background: linear-gradient(135deg, #1a73e8, #1557b0);
+            color: white;
+            padding: 11px 28px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.9rem;
+            transition: all 0.25s;
+            box-shadow: 0 3px 10px rgba(26,115,232,0.35);
+        }
+        .btn-guardar:hover { transform: translateY(-1px); box-shadow: 0 5px 15px rgba(26,115,232,0.4); }
+
+        /* ---- LOADING ---- */
+        .loading-preguntas {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 50px;
+            gap: 12px;
+            color: #888;
+            font-size: 0.95rem;
+        }
+        .spinner { width: 28px; height: 28px; border: 3px solid #e0e0e0; border-top-color: #1a73e8; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ---- EMPTY STATE ---- */
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: #aaa;
+        }
+        .empty-state i { font-size: 3rem; margin-bottom: 12px; color: #ddd; display: block; }
+        .empty-state p { font-size: 0.95rem; }
+
+        /* Materia badge */
+        .materia-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            background: #e8f0fe;
+            color: #1a73e8;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .opciones-grid { grid-template-columns: 1fr; }
+            .respuesta-selector { flex-wrap: wrap; }
+        }
+    </style>
 </head>
 <body>
     <header>
-        <div class="logo"><h1>Panel Admin <span class="subtitle">UNEMI</span></h1></div>
+        <div class="logo">
+            <i class="fa-solid fa-shield-halved" style="color:#1a73e8;"></i>
+            <h1>Panel Admin <span class="subtitle">UNEMI</span></h1>
+        </div>
         <div style="display: flex; gap: 15px; align-items: center;">
             <span id="admin-name" style="font-weight: bold; color: #1a73e8;"></span>
-            <button onclick="window.location.href='index.html'" class="btn-secondary">Volver al Simulador</button>
+            <button onclick="window.location.href='index.html'" class="btn-secondary">
+                <i class="fas fa-arrow-left"></i> Simulador
+            </button>
             <button id="btn-admin-logout" class="btn-secondary">Cerrar Sesión</button>
         </div>
     </header>
 
-    <div class="container" style="margin-top: 30px; max-width: 800px;">
-        <nav style="display: flex; justify-content: center; gap: 10px; margin-bottom: 25px;">
-            <button onclick="changeTab('tab-excel')" id="btn-tab-excel" class="btn-secondary">Cargar Excel</button>
-            <button onclick="changeTab('tab-users')" id="btn-tab-users" class="btn-secondary">Gestionar Alumnos</button>
-            <button onclick="changeTab('tab-auditoria')" id="btn-tab-auditoria" class="btn-secondary">📋 Auditoría</button>
+    <div class="container" style="margin-top: 30px; max-width: 950px;">
+        <nav class="admin-nav">
+            <button onclick="changeTab('tab-preguntas')" id="btn-tab-preguntas" class="tab-btn active">
+                <i class="fas fa-list-ol"></i> Banco de Preguntas
+            </button>
+            <button onclick="changeTab('tab-excel')" id="btn-tab-excel" class="tab-btn">
+                <i class="fas fa-file-excel"></i> Cargar Excel
+            </button>
+            <button onclick="changeTab('tab-users')" id="btn-tab-users" class="tab-btn">
+                <i class="fas fa-users"></i> Alumnos
+            </button>
+            <button onclick="changeTab('tab-auditoria')" id="btn-tab-auditoria" class="tab-btn">
+                <i class="fas fa-clipboard-list"></i> Auditoría
+            </button>
         </nav>
 
-        <div id="tab-excel">
+        <!-- ================================================================
+             TAB: BANCO DE PREGUNTAS (CRUD)
+             ================================================================ -->
+        <div id="tab-preguntas">
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
+                <div>
+                    <h3 style="font-size:1.1rem; color:#202124; font-weight:700;">
+                        <i class="fas fa-database" style="color:#1a73e8;"></i> Gestión de Banco de Preguntas
+                    </h3>
+                    <p style="font-size:0.82rem; color:#888; margin-top:3px;">Consulta, edita, agrega o elimina preguntas directamente desde aquí.</p>
+                </div>
+                <button class="btn-nueva-pregunta" id="btn-abrir-nueva">
+                    <i class="fas fa-plus-circle"></i> Nueva Pregunta
+                </button>
+            </div>
+
+            <!-- FILTROS -->
+            <div class="crud-filtros">
+                <div class="filtro-group">
+                    <label><i class="fas fa-book"></i> Materia</label>
+                    <select id="filtro-materia-crud">
+                        <option value="">— Selecciona una materia —</option>
+                    </select>
+                </div>
+                <div class="filtro-group" style="max-width:130px;">
+                    <label><i class="fas fa-eye"></i> Ver por página</label>
+                    <select id="filtro-cantidad">
+                        <option value="10">10 preguntas</option>
+                        <option value="20" selected>20 preguntas</option>
+                        <option value="50">50 preguntas</option>
+                        <option value="100">100 preguntas</option>
+                        <option value="0">Todas</option>
+                    </select>
+                </div>
+                <div class="filtro-group">
+                    <label><i class="fas fa-search"></i> Buscar texto</label>
+                    <input type="text" id="filtro-buscar" placeholder="Buscar en la pregunta...">
+                </div>
+                <div style="display:flex; gap:8px; align-items:flex-end; padding-bottom:1px;">
+                    <button id="btn-cargar-preguntas" class="btn-primary" style="padding:9px 18px; font-size:0.85rem; border-radius:7px;">
+                        <i class="fas fa-sync-alt"></i> Cargar
+                    </button>
+                </div>
+            </div>
+
+            <!-- STATS -->
+            <div class="stats-banner" id="crud-stats" style="display:none;"></div>
+
+            <!-- TABLA -->
+            <div id="tabla-preguntas-wrap">
+                <div class="empty-state">
+                    <i class="fas fa-book-open"></i>
+                    <p>Selecciona una materia y presiona <strong>Cargar</strong> para ver las preguntas.</p>
+                </div>
+            </div>
+
+            <!-- PAGINACIÓN -->
+            <div class="paginacion" id="crud-paginacion" style="display:none;"></div>
+        </div>
+
+        <!-- ================================================================
+             TAB: CARGAR EXCEL
+             ================================================================ -->
+        <div id="tab-excel" class="hidden">
             <h3>Carga Masiva de Preguntas (Con Actualización Automática)</h3>
             <p style="font-size: 0.85em; color: #666; margin-bottom: 10px;">
                 Si la pregunta ya existe, se actualizarán sus opciones y la <strong>explicación</strong>.
@@ -34,6 +565,9 @@
             <button id="btn-save-excel" class="btn-primary">Procesar y Sincronizar con Firebase</button>
         </div>
 
+        <!-- ================================================================
+             TAB: ALUMNOS
+             ================================================================ -->
         <div id="tab-users" class="hidden">
             <h3>Gestión de Alumnos (CRUD)</h3>
             <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
@@ -49,13 +583,15 @@
                 <tbody id="user-table-body"></tbody>
             </table>
         </div>
+
+        <!-- ================================================================
+             TAB: AUDITORÍA
+             ================================================================ -->
         <div id="tab-auditoria" class="hidden">
             <h3>📋 Reporte de Auditoría</h3>
             <p style="font-size: 0.85em; color: #666; margin-bottom: 15px;">
                 Registro de accesos, preguntas vistas e intentos sospechosos de todos los alumnos.
             </p>
-
-            <!-- FILTROS -->
             <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
                 <div style="flex: 1; min-width: 160px;">
                     <label style="font-size: 0.8rem; font-weight: bold; display: block; margin-bottom: 4px;">Usuario (email)</label>
@@ -78,11 +614,7 @@
                     <button id="btn-limpiar-filtros" class="btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">✖ Limpiar</button>
                 </div>
             </div>
-
-            <!-- RESUMEN -->
             <div id="auditoria-resumen" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;"></div>
-
-            <!-- TABLA -->
             <div style="overflow-x: auto;">
                 <table id="tabla-auditoria">
                     <thead>
@@ -102,10 +634,102 @@
         </div>
     </div>
 
+    <!-- ================================================================
+         MODAL: AGREGAR / EDITAR PREGUNTA
+         ================================================================ -->
+    <div id="modal-pregunta-overlay">
+        <div id="modal-pregunta">
+            <div class="modal-header">
+                <h3 id="modal-titulo">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Nueva Pregunta</span>
+                </h3>
+                <button class="modal-close" id="btn-cerrar-modal" title="Cerrar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <input type="hidden" id="modal-doc-id">
+
+            <!-- MATERIA -->
+            <div class="form-group">
+                <label><i class="fas fa-book"></i> Materia</label>
+                <select id="modal-materia"></select>
+            </div>
+
+            <!-- TEXTO DE LA PREGUNTA -->
+            <div class="form-group">
+                <label><i class="fas fa-question-circle"></i> Texto de la Pregunta</label>
+                <textarea id="modal-texto" rows="3" placeholder="Escribe aquí la pregunta..."></textarea>
+            </div>
+
+            <!-- OPCIONES -->
+            <div class="form-group">
+                <label><i class="fas fa-list"></i> Opciones de Respuesta</label>
+                <div class="opciones-grid">
+                    <div>
+                        <div class="opcion-input-wrap" style="margin-bottom:10px;">
+                            <div class="opcion-letra">A</div>
+                            <input type="text" id="modal-op0" placeholder="Opción A">
+                        </div>
+                        <div class="opcion-input-wrap">
+                            <div class="opcion-letra" style="background:#34a853;">B</div>
+                            <input type="text" id="modal-op1" placeholder="Opción B">
+                        </div>
+                    </div>
+                    <div>
+                        <div class="opcion-input-wrap" style="margin-bottom:10px;">
+                            <div class="opcion-letra" style="background:#fbbc04;">C</div>
+                            <input type="text" id="modal-op2" placeholder="Opción C">
+                        </div>
+                        <div class="opcion-input-wrap">
+                            <div class="opcion-letra" style="background:#ea4335;">D</div>
+                            <input type="text" id="modal-op3" placeholder="Opción D">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RESPUESTA CORRECTA -->
+            <div class="form-group">
+                <label><i class="fas fa-check-circle"></i> Respuesta Correcta</label>
+                <div class="respuesta-selector" id="modal-respuesta-selector">
+                    <div class="respuesta-opcion" data-val="0" onclick="seleccionarRespuesta(0)">
+                        <div class="letra-resp">A</div> Opción A
+                    </div>
+                    <div class="respuesta-opcion" data-val="1" onclick="seleccionarRespuesta(1)">
+                        <div class="letra-resp">B</div> Opción B
+                    </div>
+                    <div class="respuesta-opcion" data-val="2" onclick="seleccionarRespuesta(2)">
+                        <div class="letra-resp">C</div> Opción C
+                    </div>
+                    <div class="respuesta-opcion" data-val="3" onclick="seleccionarRespuesta(3)">
+                        <div class="letra-resp">D</div> Opción D
+                    </div>
+                </div>
+            </div>
+
+            <!-- EXPLICACIÓN -->
+            <div class="form-group">
+                <label><i class="fas fa-lightbulb"></i> Explicación de la respuesta correcta</label>
+                <textarea id="modal-explicacion" rows="3" placeholder="Explica por qué esta es la respuesta correcta..."></textarea>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-cancelar" id="btn-cancelar-modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button class="btn-guardar" id="btn-guardar-pregunta">
+                    <i class="fas fa-save"></i> Guardar Pregunta
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, deleteDoc, collection, getDocs, writeBatch, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, deleteDoc, addDoc, collection, getDocs, writeBatch, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
         const app = initializeApp(firebaseConfig);
@@ -114,9 +738,47 @@
 
         const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
 
-        onAuthStateChanged(auth, (user) => { 
-            if(user) {
-                if(user.email.toLowerCase() !== ADMIN_EMAIL) {
+        // ── CONFIG DE MATERIAS ──────────────────────────────────────────
+        let materias = [];
+        try {
+            const resp = await fetch('config-materias.json');
+            const cfg = await resp.json();
+            materias = cfg.materias.filter(m => m.activa);
+        } catch {
+            materias = [
+                { id: "comp-forense",   nombre: "Computación Forense" },
+                { id: "deontologia",    nombre: "Deontología" },
+                { id: "auditoria-ti",   nombre: "Auditoría de TI" },
+                { id: "emprendimiento", nombre: "Emprendimiento e Innovación" },
+                { id: "ia",             nombre: "Inteligencia Artificial" },
+                { id: "practicas-1",    nombre: "Prácticas Laborales 1" }
+            ];
+        }
+
+        // Populate selects de materias
+        function llenarSelectMaterias(selectId, incluirTodas = false) {
+            const sel = document.getElementById(selectId);
+            sel.innerHTML = '';
+            if (incluirTodas) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = '— Selecciona una materia —';
+                sel.appendChild(opt);
+            }
+            materias.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.nombre;
+                sel.appendChild(opt);
+            });
+        }
+        llenarSelectMaterias('filtro-materia-crud', true);
+        llenarSelectMaterias('modal-materia', false);
+
+        // ── AUTH ────────────────────────────────────────────────────────
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                if (user.email.toLowerCase() !== ADMIN_EMAIL) {
                     Swal.fire({ icon: 'error', title: 'Acceso Denegado' }).then(() => {
                         signOut(auth).then(() => window.location.href = 'index.html');
                     });
@@ -128,8 +790,364 @@
             }
         });
 
+        // ================================================================
+        //  MÓDULO CRUD DE PREGUNTAS
+        // ================================================================
+
+        let todasLasPreguntas = [];   // cache de la materia cargada
+        let materiaActual = '';
+        let paginaActual = 1;
+        let preguntasPorPagina = 20;
+        let respuestaSeleccionada = -1;
+
+        const letras = ['A', 'B', 'C', 'D'];
+        const colores = ['#1a73e8', '#34a853', '#fbbc04', '#ea4335'];
+
+        // Nombre legible de materia
+        function getNombreMateria(id) {
+            return materias.find(m => m.id === id)?.nombre || id;
+        }
+
+        // ── CARGAR PREGUNTAS ────────────────────────────────────────────
+        document.getElementById('btn-cargar-preguntas').onclick = cargarPreguntas;
+
+        async function cargarPreguntas() {
+            const materiaId = document.getElementById('filtro-materia-crud').value;
+            if (!materiaId) {
+                Swal.fire('Atención', 'Selecciona una materia primero.', 'warning');
+                return;
+            }
+            materiaActual = materiaId;
+            paginaActual = 1;
+
+            const wrap = document.getElementById('tabla-preguntas-wrap');
+            wrap.innerHTML = `<div class="loading-preguntas"><div class="spinner"></div> Cargando preguntas de <strong>${getNombreMateria(materiaId)}</strong>...</div>`;
+            document.getElementById('crud-stats').style.display = 'none';
+            document.getElementById('crud-paginacion').style.display = 'none';
+
+            try {
+                const snap = await getDocs(collection(db, `bancos_preguntas/${materiaId}/preguntas`));
+                todasLasPreguntas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderTablaPreguntas();
+            } catch (e) {
+                console.error(e);
+                wrap.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle" style="color:#ea4335;"></i><p>Error al cargar: ${e.message}</p></div>`;
+            }
+        }
+
+        // ── RENDER TABLA ────────────────────────────────────────────────
+        function renderTablaPreguntas() {
+            const busqueda = document.getElementById('filtro-buscar').value.trim().toLowerCase();
+            preguntasPorPagina = parseInt(document.getElementById('filtro-cantidad').value) || 0;
+
+            // Filtrar
+            let filtradas = todasLasPreguntas;
+            if (busqueda) {
+                filtradas = filtradas.filter(p =>
+                    (p.texto || '').toLowerCase().includes(busqueda) ||
+                    (p.opciones || []).some(o => o.toLowerCase().includes(busqueda)) ||
+                    (p.explicacion_correcta || '').toLowerCase().includes(busqueda)
+                );
+            }
+
+            // Stats
+            const statsEl = document.getElementById('crud-stats');
+            statsEl.style.display = 'flex';
+            statsEl.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-num">${todasLasPreguntas.length}</div>
+                    <div class="stat-label">Total en BD</div>
+                </div>
+                <div class="stat-card" style="border-left-color:#34a853;">
+                    <div class="stat-num" style="color:#34a853;">${filtradas.length}</div>
+                    <div class="stat-label">Encontradas</div>
+                </div>
+                <div class="stat-card" style="border-left-color:#fbbc04;">
+                    <div class="stat-num" style="color:#856404;">${getNombreMateria(materiaActual)}</div>
+                    <div class="stat-label">Materia activa</div>
+                </div>
+            `;
+
+            // Paginación
+            let paginadas = filtradas;
+            let totalPaginas = 1;
+
+            if (preguntasPorPagina > 0) {
+                totalPaginas = Math.ceil(filtradas.length / preguntasPorPagina);
+                if (paginaActual > totalPaginas) paginaActual = 1;
+                const desde = (paginaActual - 1) * preguntasPorPagina;
+                paginadas = filtradas.slice(desde, desde + preguntasPorPagina);
+            }
+
+            const wrap = document.getElementById('tabla-preguntas-wrap');
+
+            if (paginadas.length === 0) {
+                wrap.innerHTML = `<div class="empty-state"><i class="fas fa-search"></i><p>No se encontraron preguntas${busqueda ? ` con "<strong>${busqueda}</strong>"` : ''}.</p></div>`;
+                document.getElementById('crud-paginacion').style.display = 'none';
+                return;
+            }
+
+            // Construir tabla
+            let html = `
+                <table id="tabla-preguntas">
+                    <thead>
+                        <tr>
+                            <th style="width:44px;">#</th>
+                            <th>Pregunta y Opciones</th>
+                            <th>Explicación</th>
+                            <th style="width:110px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            const globalOffset = preguntasPorPagina > 0 ? (paginaActual - 1) * preguntasPorPagina : 0;
+
+            paginadas.forEach((p, i) => {
+                const num = globalOffset + i + 1;
+                const resp = parseInt(p.respuesta ?? -1);
+                const opciones = p.opciones || [];
+
+                const opcionesHtml = opciones.map((op, idx) => `
+                    <div class="opcion-mini ${idx === resp ? 'correcta' : ''}">
+                        ${idx === resp ? '<i class="fas fa-check" style="font-size:0.7rem;margin-right:3px;"></i>' : ''}
+                        <strong>${letras[idx]}.</strong> ${escapeHtml(op)}
+                    </div>
+                `).join('');
+
+                const explicacion = p.explicacion_correcta || '—';
+
+                html += `
+                    <tr>
+                        <td><div class="num-badge">${num}</div></td>
+                        <td class="td-pregunta">
+                            <div class="pregunta-texto">${escapeHtml(p.texto || '')}</div>
+                            <div class="opciones-mini">${opcionesHtml}</div>
+                        </td>
+                        <td class="td-explicacion">
+                            <div class="explicacion-preview">${escapeHtml(explicacion)}</div>
+                        </td>
+                        <td>
+                            <div class="acciones-celda">
+                                <button class="btn-accion btn-editar" onclick="window.editarPregunta('${p.id}')">
+                                    <i class="fas fa-pen"></i>
+                                </button>
+                                <button class="btn-accion btn-eliminar" onclick="window.eliminarPregunta('${p.id}', '${escapeHtml(p.texto || '').substring(0,40)}...')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `</tbody></table>`;
+            wrap.innerHTML = html;
+
+            // Render paginación
+            if (preguntasPorPagina > 0 && totalPaginas > 1) {
+                renderPaginacion(totalPaginas, filtradas.length);
+            } else {
+                document.getElementById('crud-paginacion').style.display = 'none';
+            }
+        }
+
+        function renderPaginacion(totalPaginas, totalItems) {
+            const el = document.getElementById('crud-paginacion');
+            el.style.display = 'flex';
+            let html = '';
+            html += `<button onclick="irPagina(${paginaActual - 1})" ${paginaActual === 1 ? 'disabled' : ''}><i class="fas fa-chevron-left"></i></button>`;
+
+            // Mostrar páginas con ellipsis
+            for (let p = 1; p <= totalPaginas; p++) {
+                if (p === 1 || p === totalPaginas || (p >= paginaActual - 2 && p <= paginaActual + 2)) {
+                    html += `<button onclick="irPagina(${p})" class="${p === paginaActual ? 'activa' : ''}">${p}</button>`;
+                } else if (p === paginaActual - 3 || p === paginaActual + 3) {
+                    html += `<span style="padding:0 5px;color:#aaa;">…</span>`;
+                }
+            }
+
+            html += `<button onclick="irPagina(${paginaActual + 1})" ${paginaActual === totalPaginas ? 'disabled' : ''}><i class="fas fa-chevron-right"></i></button>`;
+            html += `<span class="info-pagina">Pág. ${paginaActual} de ${totalPaginas} · ${totalItems} preguntas</span>`;
+            el.innerHTML = html;
+        }
+
+        window.irPagina = (p) => {
+            paginaActual = p;
+            renderTablaPreguntas();
+            window.scrollTo({ top: 300, behavior: 'smooth' });
+        };
+
+        // Buscar en tiempo real
+        document.getElementById('filtro-buscar').addEventListener('input', () => {
+            if (todasLasPreguntas.length > 0) {
+                paginaActual = 1;
+                renderTablaPreguntas();
+            }
+        });
+        document.getElementById('filtro-cantidad').addEventListener('change', () => {
+            if (todasLasPreguntas.length > 0) {
+                paginaActual = 1;
+                renderTablaPreguntas();
+            }
+        });
+
+        // ── MODAL ───────────────────────────────────────────────────────
+        function abrirModal(modoEdicion = false) {
+            document.getElementById('modal-pregunta-overlay').classList.add('visible');
+            const icono = modoEdicion ? 'fa-pen' : 'fa-plus-circle';
+            const titulo = modoEdicion ? 'Editar Pregunta' : 'Nueva Pregunta';
+            document.querySelector('#modal-titulo i').className = `fas ${icono}`;
+            document.querySelector('#modal-titulo span').textContent = titulo;
+        }
+
+        function cerrarModal() {
+            document.getElementById('modal-pregunta-overlay').classList.remove('visible');
+            limpiarModal();
+        }
+
+        function limpiarModal() {
+            document.getElementById('modal-doc-id').value = '';
+            document.getElementById('modal-texto').value = '';
+            document.getElementById('modal-op0').value = '';
+            document.getElementById('modal-op1').value = '';
+            document.getElementById('modal-op2').value = '';
+            document.getElementById('modal-op3').value = '';
+            document.getElementById('modal-explicacion').value = '';
+            respuestaSeleccionada = -1;
+            document.querySelectorAll('.respuesta-opcion').forEach(el => el.classList.remove('seleccionada'));
+            // Preseleccionar materia actual si hay una
+            if (materiaActual) document.getElementById('modal-materia').value = materiaActual;
+        }
+
+        window.seleccionarRespuesta = (idx) => {
+            respuestaSeleccionada = idx;
+            document.querySelectorAll('.respuesta-opcion').forEach((el, i) => {
+                el.classList.toggle('seleccionada', i === idx);
+            });
+        };
+
+        document.getElementById('btn-abrir-nueva').onclick = () => {
+            limpiarModal();
+            abrirModal(false);
+        };
+        document.getElementById('btn-cerrar-modal').onclick = cerrarModal;
+        document.getElementById('btn-cancelar-modal').onclick = cerrarModal;
+        document.getElementById('modal-pregunta-overlay').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) cerrarModal();
+        });
+
+        // ── EDITAR PREGUNTA ─────────────────────────────────────────────
+        window.editarPregunta = (docId) => {
+            const p = todasLasPreguntas.find(x => x.id === docId);
+            if (!p) return;
+
+            document.getElementById('modal-doc-id').value = docId;
+            document.getElementById('modal-materia').value = materiaActual;
+            document.getElementById('modal-texto').value = p.texto || '';
+            const opciones = p.opciones || [];
+            ['modal-op0','modal-op1','modal-op2','modal-op3'].forEach((id, i) => {
+                document.getElementById(id).value = opciones[i] || '';
+            });
+            document.getElementById('modal-explicacion').value = p.explicacion_correcta || '';
+
+            const resp = parseInt(p.respuesta ?? -1);
+            if (resp >= 0) {
+                window.seleccionarRespuesta(resp);
+            }
+
+            abrirModal(true);
+        };
+
+        // ── ELIMINAR PREGUNTA ───────────────────────────────────────────
+        window.eliminarPregunta = (docId, preview) => {
+            Swal.fire({
+                title: '¿Eliminar esta pregunta?',
+                html: `<p style="font-size:0.85rem;color:#666;">"${preview}"</p>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-trash"></i> Sí, eliminar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#ea4335',
+            }).then(async (r) => {
+                if (!r.isConfirmed) return;
+                try {
+                    await deleteDoc(doc(db, `bancos_preguntas/${materiaActual}/preguntas`, docId));
+                    todasLasPreguntas = todasLasPreguntas.filter(p => p.id !== docId);
+                    renderTablaPreguntas();
+                    Swal.fire({ icon: 'success', title: 'Eliminada', text: 'La pregunta fue eliminada.', timer: 1800, showConfirmButton: false });
+                } catch (e) {
+                    Swal.fire('Error', e.message, 'error');
+                }
+            });
+        };
+
+        // ── GUARDAR (CREAR o ACTUALIZAR) ────────────────────────────────
+        document.getElementById('btn-guardar-pregunta').onclick = async () => {
+            const materiaId = document.getElementById('modal-materia').value;
+            const texto = document.getElementById('modal-texto').value.trim();
+            const op0 = document.getElementById('modal-op0').value.trim();
+            const op1 = document.getElementById('modal-op1').value.trim();
+            const op2 = document.getElementById('modal-op2').value.trim();
+            const op3 = document.getElementById('modal-op3').value.trim();
+            const explicacion = document.getElementById('modal-explicacion').value.trim();
+            const docId = document.getElementById('modal-doc-id').value;
+
+            // Validar
+            if (!texto) return Swal.fire('Campo requerido', 'Escribe el texto de la pregunta.', 'warning');
+            if (!op0 || !op1 || !op2 || !op3) return Swal.fire('Campo requerido', 'Completa las 4 opciones de respuesta.', 'warning');
+            if (respuestaSeleccionada < 0) return Swal.fire('Campo requerido', 'Selecciona cuál es la respuesta correcta.', 'warning');
+
+            const datos = {
+                texto,
+                opciones: [op0, op1, op2, op3],
+                respuesta: respuestaSeleccionada,
+                explicacion_correcta: explicacion || 'Consulte el material de estudio oficial.'
+            };
+
+            const btn = document.getElementById('btn-guardar-pregunta');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+            try {
+                if (docId) {
+                    // Actualizar existente
+                    await setDoc(doc(db, `bancos_preguntas/${materiaId}/preguntas`, docId), datos);
+                    const idx = todasLasPreguntas.findIndex(p => p.id === docId);
+                    if (idx >= 0) todasLasPreguntas[idx] = { id: docId, ...datos };
+                    Swal.fire({ icon: 'success', title: '¡Actualizada!', text: 'La pregunta fue actualizada correctamente.', timer: 2000, showConfirmButton: false });
+                } else {
+                    // Crear nueva
+                    const newId = `p_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+                    await setDoc(doc(db, `bancos_preguntas/${materiaId}/preguntas`, newId), datos);
+                    todasLasPreguntas.unshift({ id: newId, ...datos });
+                    // Si la materia del modal es diferente a la activa, recargar
+                    if (materiaId !== materiaActual) {
+                        materiaActual = materiaId;
+                        document.getElementById('filtro-materia-crud').value = materiaId;
+                    }
+                    Swal.fire({ icon: 'success', title: '¡Creada!', text: 'La nueva pregunta fue añadida al banco.', timer: 2000, showConfirmButton: false });
+                }
+                cerrarModal();
+                renderTablaPreguntas();
+            } catch (e) {
+                Swal.fire('Error', e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Guardar Pregunta';
+            }
+        };
+
+        // ── UTILIDADES ──────────────────────────────────────────────────
+        function escapeHtml(str) {
+            return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        // ================================================================
+        //  MÓDULO CARGAR EXCEL
+        // ================================================================
         let dataExcel = [];
-        
+
         function validarEstructuraExcel(data) {
             if (!data || data.length === 0) return { valido: false, mensaje: 'El archivo está vacío.' };
             const requeridos = ['materia_id', 'texto', 'opcion_0', 'opcion_1', 'opcion_2', 'opcion_3', 'respuesta'];
@@ -148,7 +1166,7 @@
             const reader = new FileReader();
             reader.onload = (ev) => {
                 try {
-                    const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+                    const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
                     const tempData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
                     const val = validarEstructuraExcel(tempData);
                     if (!val.valido) {
@@ -156,7 +1174,7 @@
                         e.target.value = '';
                     } else {
                         dataExcel = tempData;
-                        Swal.fire('Éxito', 'Archivo cargado y validado.', 'success');
+                        Swal.fire('Éxito', `Archivo cargado: ${tempData.length} preguntas listas.`, 'success');
                     }
                 } catch (err) {
                     Swal.fire('Error', 'No se pudo leer el archivo.', 'error');
@@ -166,61 +1184,33 @@
         };
 
         document.getElementById('btn-save-excel').onclick = async () => {
-            if(dataExcel.length === 0) return Swal.fire('Error', 'Carga un archivo Excel primero.', 'warning');
-
-            Swal.fire({
-                title: 'Sincronizando...',
-                text: 'Actualizando base de datos en Firebase',
-                allowOutsideClick: false,
-                didOpen: () => { Swal.showLoading(); }
-            });
-
+            if (dataExcel.length === 0) return Swal.fire('Error', 'Carga un archivo Excel primero.', 'warning');
+            Swal.fire({ title: 'Sincronizando...', text: 'Actualizando base de datos en Firebase', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
             try {
                 const batch = writeBatch(db);
-                let nuevas = 0;
-                let actualizadas = 0;
-
+                let nuevas = 0; let actualizadas = 0;
                 for (const p of dataExcel) {
                     const colRef = collection(db, `bancos_preguntas/${p.materia_id}/preguntas`);
                     const q = query(colRef, where("texto", "==", p.texto.trim()));
                     const snap = await getDocs(q);
-
                     let ref;
-                    if (!snap.empty) {
-                        // Si existe, usamos el ID del documento encontrado para sobreescribirlo/actualizarlo
-                        ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, snap.docs[0].id);
-                        actualizadas++;
-                    } else {
-                        // Si no existe, creamos un ID nuevo
-                        ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`);
-                        nuevas++;
-                    }
-
-                    batch.set(ref, { 
-                        texto: p.texto.trim(), 
-                        opciones: [
-                            p.opcion_0.toString().trim(), 
-                            p.opcion_1.toString().trim(), 
-                            p.opcion_2.toString().trim(), 
-                            p.opcion_3.toString().trim()
-                        ], 
-                        respuesta: parseInt(p.respuesta),
-                        // ASIGNACIÓN CLAVE: Aquí tomamos 'explicacion' del Excel y lo guardamos como 'explicacion_correcta'
-                        explicacion_correcta: p.explicacion ? p.explicacion.toString().trim() : "Consulte el material de estudio oficial."
-                    });
+                    if (!snap.empty) { ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, snap.docs[0].id); actualizadas++; }
+                    else { ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`); nuevas++; }
+                    batch.set(ref, { texto: p.texto.trim(), opciones: [p.opcion_0.toString().trim(), p.opcion_1.toString().trim(), p.opcion_2.toString().trim(), p.opcion_3.toString().trim()], respuesta: parseInt(p.respuesta), explicacion_correcta: p.explicacion ? p.explicacion.toString().trim() : "Consulte el material de estudio oficial." });
                 }
-
                 await batch.commit();
                 Swal.fire('Proceso Terminado', `Preguntas Nuevas: ${nuevas}<br>Preguntas Actualizadas: ${actualizadas}`, 'success');
                 dataExcel = [];
                 document.getElementById('upload-excel').value = '';
-
             } catch (error) {
                 console.error(error);
                 Swal.fire('Error Crítico', 'No se pudo completar la sincronización.', 'error');
             }
         };
 
+        // ================================================================
+        //  MÓDULO USUARIOS
+        // ================================================================
         async function loadUsers() {
             const body = document.getElementById('user-table-body');
             body.innerHTML = "";
@@ -234,29 +1224,26 @@
             });
         }
 
-        window.prepareEdit = (email, limit) => {
+        window.prepareEdit = (email, lim) => {
             document.getElementById('edit-email').value = email;
-            document.getElementById('edit-limit').value = limit;
+            document.getElementById('edit-limit').value = lim;
         };
-
         window.confirmDelete = (email) => {
             Swal.fire({ title: '¿Eliminar usuario?', icon: 'warning', showCancelButton: true }).then(async (r) => {
-                if(r.isConfirmed) { await deleteDoc(doc(db, "usuarios_seguros", email)); loadUsers(); }
+                if (r.isConfirmed) { await deleteDoc(doc(db, "usuarios_seguros", email)); loadUsers(); }
             });
         };
-
         document.getElementById('btn-update-user').onclick = async () => {
             const email = document.getElementById('edit-email').value.trim().toLowerCase();
-            if(!email) return;
+            if (!email) return;
             await setDoc(doc(db, "usuarios_seguros", email), { max_dispositivos: parseInt(document.getElementById('edit-limit').value) });
             Swal.fire('Éxito', 'Información actualizada.', 'success'); loadUsers();
         };
 
         // ================================================================
-        // MÓDULO DE AUDITORÍA
+        //  MÓDULO AUDITORÍA
         // ================================================================
         let todosLosRegistros = [];
-
         const TIPO_LABELS = {
             'inicio_sesion':            { label: '🔐 Inicio de Sesión',    color: '#1a73e8' },
             'ver_pregunta':             { label: '👁️ Ver Pregunta',         color: '#34a853' },
@@ -272,7 +1259,7 @@
                 const snap = await getDocs(query(collection(db, "auditoria_accesos"), orderBy("timestamp", "desc"), limit(500)));
                 todosLosRegistros = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 renderTablaAuditoria(todosLosRegistros);
-            } catch(e) {
+            } catch (e) {
                 console.error(e);
                 body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ea4335;padding:20px;">Error al cargar. Verifica los índices de Firestore.</td></tr>`;
             }
@@ -283,47 +1270,27 @@
             const countEl = document.getElementById('auditoria-count');
             const resumenEl = document.getElementById('auditoria-resumen');
             body.innerHTML = '';
-
             if (registros.length === 0) {
                 body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#aaa;padding:30px;">No se encontraron registros.</td></tr>`;
-                countEl.innerText = '';
-                resumenEl.innerHTML = '';
-                return;
+                countEl.innerText = ''; resumenEl.innerHTML = ''; return;
             }
-
-            // Tarjetas de resumen
             const conteos = {};
             registros.forEach(r => { conteos[r.tipo] = (conteos[r.tipo] || 0) + 1; });
             resumenEl.innerHTML = Object.entries(conteos).map(([tipo, count]) => {
                 const info = TIPO_LABELS[tipo] || { label: tipo, color: '#888' };
-                return `<div style="background:#fff;border:1px solid #eee;border-left:4px solid ${info.color};
-                    padding:8px 14px;border-radius:6px;font-size:0.82rem;">
-                    <strong style="color:${info.color}">${info.label}</strong><br>
-                    <span style="font-size:1.1rem;font-weight:bold;">${count}</span> registros
-                </div>`;
+                return `<div style="background:#fff;border:1px solid #eee;border-left:4px solid ${info.color};padding:8px 14px;border-radius:6px;font-size:0.82rem;"><strong style="color:${info.color}">${info.label}</strong><br><span style="font-size:1.1rem;font-weight:bold;">${count}</span> registros</div>`;
             }).join('');
-
-            // Filas
             registros.forEach(r => {
                 const info = TIPO_LABELS[r.tipo] || { label: r.tipo, color: '#888' };
                 const fecha = r.fecha_legible || (r.timestamp?.toDate ? r.timestamp.toDate().toLocaleString('es-EC') : '—');
                 let detalle = '—';
-                if (r.tipo === 'ver_pregunta') {
-                    detalle = `<strong>${r.materia || ''}</strong> | Modo: ${r.modo || ''} | #${r.pregunta_num || ''}: "${(r.pregunta_texto || '').substring(0,50)}..."`;
-                } else if (r.tipo === 'perder_foco') {
-                    detalle = `Motivo: ${r.motivo || '—'}`;
-                } else if (r.tipo === 'intento_inspeccionar') {
-                    detalle = `Tecla: ${r.tecla || '—'}`;
-                }
+                if (r.tipo === 'ver_pregunta') detalle = `<strong>${r.materia || ''}</strong> | Modo: ${r.modo || ''} | #${r.pregunta_num || ''}: "${(r.pregunta_texto || '').substring(0, 50)}..."`;
+                else if (r.tipo === 'perder_foco') detalle = `Motivo: ${r.motivo || '—'}`;
+                else if (r.tipo === 'intento_inspeccionar') detalle = `Tecla: ${r.tecla || '—'}`;
                 const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td style="font-size:0.8rem;white-space:nowrap;">${fecha}</td>
-                    <td style="font-size:0.8rem;">${r.usuario || '—'}</td>
-                    <td><span style="background:${info.color}20;color:${info.color};padding:3px 8px;border-radius:20px;font-size:0.78rem;font-weight:600;white-space:nowrap;">${info.label}</span></td>
-                    <td style="font-size:0.8rem;">${detalle}</td>`;
+                tr.innerHTML = `<td style="font-size:0.8rem;white-space:nowrap;">${fecha}</td><td style="font-size:0.8rem;">${r.usuario || '—'}</td><td><span style="background:${info.color}20;color:${info.color};padding:3px 8px;border-radius:20px;font-size:0.78rem;font-weight:600;white-space:nowrap;">${info.label}</span></td><td style="font-size:0.8rem;">${detalle}</td>`;
                 body.appendChild(tr);
             });
-
             countEl.innerText = `Mostrando ${registros.length} registros`;
         }
 
@@ -343,25 +1310,12 @@
             if (emailFiltro) datos = datos.filter(r => (r.usuario || '').toLowerCase().includes(emailFiltro));
             if (tipoFiltro) datos = datos.filter(r => r.tipo === tipoFiltro);
             if (datos.length === 0) return Swal.fire('Sin datos', 'No hay registros para exportar.', 'warning');
-
-            const filas = datos.map(r => ({
-                'Fecha / Hora':   r.fecha_legible || '—',
-                'Usuario':        r.usuario || '—',
-                'Nombre':         r.nombre || '—',
-                'Tipo de Evento': TIPO_LABELS[r.tipo]?.label || r.tipo,
-                'Materia':        r.materia || '—',
-                'Modo':           r.modo || '—',
-                'Pregunta #':     r.pregunta_num || '—',
-                'Texto Pregunta': r.pregunta_texto || '—',
-                'Motivo/Detalle': r.motivo || r.tecla || '—',
-            }));
-
+            const filas = datos.map(r => ({ 'Fecha / Hora': r.fecha_legible || '—', 'Usuario': r.usuario || '—', 'Nombre': r.nombre || '—', 'Tipo de Evento': TIPO_LABELS[r.tipo]?.label || r.tipo, 'Materia': r.materia || '—', 'Modo': r.modo || '—', 'Pregunta #': r.pregunta_num || '—', 'Texto Pregunta': r.pregunta_texto || '—', 'Motivo/Detalle': r.motivo || r.tecla || '—' }));
             const ws = XLSX.utils.json_to_sheet(filas);
-            ws['!cols'] = [{ wch:22 },{ wch:30 },{ wch:25 },{ wch:25 },{ wch:20 },{ wch:12 },{ wch:10 },{ wch:50 },{ wch:20 }];
+            ws['!cols'] = [{ wch: 22 }, { wch: 30 }, { wch: 25 }, { wch: 25 }, { wch: 20 }, { wch: 12 }, { wch: 10 }, { wch: 50 }, { wch: 20 }];
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Auditoría');
-            const fecha = new Date().toLocaleDateString('es-EC').replace(/\//g, '-');
-            XLSX.writeFile(wb, `Auditoria_UNEMI_${fecha}.xlsx`);
+            XLSX.writeFile(wb, `Auditoria_UNEMI_${new Date().toLocaleDateString('es-EC').replace(/\//g, '-')}.xlsx`);
         }
 
         document.getElementById('btn-filtrar').onclick = filtrarAuditoria;
@@ -372,17 +1326,27 @@
             renderTablaAuditoria(todosLosRegistros);
         };
 
+        // ================================================================
+        //  NAVEGACIÓN DE TABS
+        // ================================================================
         window.changeTab = (id) => {
-            ['tab-excel', 'tab-users', 'tab-auditoria'].forEach(t => {
+            ['tab-preguntas', 'tab-excel', 'tab-users', 'tab-auditoria'].forEach(t => {
                 document.getElementById(t).classList.toggle('hidden', t !== id);
             });
+            // Actualizar botones activos
+            ['btn-tab-preguntas', 'btn-tab-excel', 'btn-tab-users', 'btn-tab-auditoria'].forEach(b => {
+                document.getElementById(b).classList.remove('active');
+            });
+            document.getElementById(`btn-tab-${id.replace('tab-', '')}`).classList.add('active');
+
             if (id === 'tab-users') loadUsers();
             if (id === 'tab-auditoria') cargarAuditoria();
         };
 
         document.getElementById('btn-admin-logout').onclick = () => {
-            if(confirm("¿Seguro que desea salir?")) signOut(auth).then(() => location.href='index.html');
+            if (confirm("¿Seguro que desea salir?")) signOut(auth).then(() => location.href = 'index.html');
         };
+
     </script>
 </body>
 </html>
