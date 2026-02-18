@@ -205,17 +205,15 @@ th { color: #1a73e8; background: #f8f9fa; text-transform: uppercase; }
 
 /* MARCA DE AGUA DISCRETA */
 #security-watermark {
-    position: fixed;
-    bottom: 12px;
-    right: 15px;
-    font-size: 0.72rem;
-    color: rgba(60, 60, 60, 0.55);
+    font-size: 0.70rem;
+    color: rgba(100, 100, 100, 0.5);
     font-family: 'Courier New', monospace;
     pointer-events: none;
-    z-index: 99999;
     user-select: none;
+    text-align: right;
+    margin-bottom: 6px;
     letter-spacing: 0.03em;
-    background: transparent;
+    display: block;
 }
 
 /* OVERLAY DE CONTENIDO OCULTO */
