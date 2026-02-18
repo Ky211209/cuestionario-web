@@ -838,7 +838,8 @@
         // ── RENDER TABLA ────────────────────────────────────────────────
         function renderTablaPreguntas() {
             const busqueda = document.getElementById('filtro-buscar').value.trim().toLowerCase();
-            preguntasPorPagina = parseInt(document.getElementById('filtro-cantidad').value) || 0;
+            const cantidadVal = document.getElementById('filtro-cantidad').value;
+            preguntasPorPagina = cantidadVal === '0' ? 0 : (parseInt(cantidadVal) || 20);
 
             // Filtrar
             let filtradas = todasLasPreguntas;
@@ -947,8 +948,16 @@
             // Render paginación
             if (preguntasPorPagina > 0 && totalPaginas > 1) {
                 renderPaginacion(totalPaginas, filtradas.length);
+            } else if (preguntasPorPagina > 0 && totalPaginas === 1) {
+                // 1 sola página: mostrar contador sin botones de navegación
+                const el = document.getElementById('crud-paginacion');
+                el.style.display = 'flex';
+                el.innerHTML = `<span class="info-pagina">Mostrando ${paginadas.length} de ${filtradas.length} preguntas</span>`;
             } else {
-                document.getElementById('crud-paginacion').style.display = 'none';
+                // Modo "todas"
+                const el = document.getElementById('crud-paginacion');
+                el.style.display = 'flex';
+                el.innerHTML = `<span class="info-pagina">Mostrando todas: ${filtradas.length} preguntas</span>`;
             }
         }
 
