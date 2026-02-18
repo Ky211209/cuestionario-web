@@ -19,33 +19,42 @@ let contentHidden = false;
 // --- 1. MARCA DE AGUA DISCRETA ---
 function crearMarcaDeAgua(email) {
     if (watermarkElement) watermarkElement.remove();
-    watermarkElement = document.createElement('div');
-    watermarkElement.id = 'security-watermark';
-    watermarkElement.innerText = `© ${email}`;
-    // Estilos inline para evitar conflictos con cualquier CSS
-    watermarkElement.style.cssText = `
-        position: fixed !important;
-        bottom: 12px !important;
-        right: 15px !important;
-        font-size: 0.72rem !important;
-        color: rgba(60, 60, 60, 0.55) !important;
-        font-family: 'Courier New', monospace !important;
-        pointer-events: none !important;
-        z-index: 99999 !important;
-        user-select: none !important;
-        letter-spacing: 0.03em !important;
-        background: transparent !important;
-        display: block !important;
+    // La marca se insertará dentro del quiz en renderQuestion()
+    // Guardamos el email para usarlo después
+    watermarkElement = email;
+}
+
+function insertarMarcaEnPregunta(email) {
+    const existente = document.getElementById('security-watermark');
+    if (existente) existente.remove();
+
+    const wm = document.createElement('div');
+    wm.id = 'security-watermark';
+    wm.innerText = `© ${email}`;
+    wm.style.cssText = `
+        font-size: 0.70rem;
+        color: rgba(100, 100, 100, 0.5);
+        font-family: 'Courier New', monospace;
+        user-select: none;
+        pointer-events: none;
+        text-align: right;
+        margin-bottom: 6px;
+        letter-spacing: 0.03em;
     `;
-    document.body.appendChild(watermarkElement);
+
+    const quizScreen = document.getElementById('quiz-screen');
+    const questionText = document.getElementById('question-text');
+    quizScreen.insertBefore(wm, questionText);
 }
 
 function mostrarMarcaDeAgua() {
-    if (watermarkElement) watermarkElement.style.display = 'block';
+    const wm = document.getElementById('security-watermark');
+    if (wm) wm.style.display = 'block';
 }
 
 function ocultarMarcaDeAgua() {
-    if (watermarkElement) watermarkElement.style.display = 'none';
+    const wm = document.getElementById('security-watermark');
+    if (wm) wm.style.display = 'none';
 }
 
 // --- 2. LOG DE AUDITORÍA EN FIREBASE ---
@@ -399,6 +408,9 @@ function renderQuestion() {
         pregunta_id: question.id,
         pregunta_texto: (question.texto || '').substring(0, 80)
     });
+
+    // Insertar marca de agua encima de la pregunta
+    insertarMarcaEnPregunta(currentUserEmail);
 
     // Manejar diferentes estructuras de datos (texto, explicacion, o pregunta)
     const preguntaTexto = question.texto || question.explicacion || question.pregunta || 'Pregunta sin texto';
