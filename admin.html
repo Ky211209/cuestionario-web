@@ -22,6 +22,7 @@
         <nav style="display: flex; justify-content: center; gap: 10px; margin-bottom: 25px;">
             <button onclick="changeTab('tab-excel')" id="btn-tab-excel" class="btn-secondary">Cargar Excel</button>
             <button onclick="changeTab('tab-users')" id="btn-tab-users" class="btn-secondary">Gestionar Alumnos</button>
+            <button onclick="changeTab('tab-auditoria')" id="btn-tab-auditoria" class="btn-secondary">📋 Auditoría</button>
         </nav>
 
         <div id="tab-excel">
@@ -48,12 +49,60 @@
                 <tbody id="user-table-body"></tbody>
             </table>
         </div>
-    </div>
+        <div id="tab-auditoria" class="hidden">
+            <h3>📋 Reporte de Auditoría</h3>
+            <p style="font-size: 0.85em; color: #666; margin-bottom: 15px;">
+                Registro de accesos, preguntas vistas e intentos sospechosos de todos los alumnos.
+            </p>
 
-    <script type="module">
+            <!-- FILTROS -->
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
+                <div style="flex: 1; min-width: 160px;">
+                    <label style="font-size: 0.8rem; font-weight: bold; display: block; margin-bottom: 4px;">Usuario (email)</label>
+                    <input type="text" id="filtro-email" placeholder="Filtrar por email..." style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd; font-size: 0.85rem;">
+                </div>
+                <div style="flex: 1; min-width: 130px;">
+                    <label style="font-size: 0.8rem; font-weight: bold; display: block; margin-bottom: 4px;">Tipo de evento</label>
+                    <select id="filtro-tipo" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd; font-size: 0.85rem;">
+                        <option value="">Todos</option>
+                        <option value="inicio_sesion">Inicio sesión</option>
+                        <option value="ver_pregunta">Ver pregunta</option>
+                        <option value="perder_foco">Perder foco</option>
+                        <option value="intento_inspeccionar">Intento inspeccionar</option>
+                        <option value="intento_captura_pantalla">Intento captura</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button id="btn-filtrar" class="btn-primary" style="padding: 8px 16px; font-size: 0.85rem;">🔍 Filtrar</button>
+                    <button id="btn-exportar-excel" class="btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">📥 Exportar Excel</button>
+                    <button id="btn-limpiar-filtros" class="btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">✖ Limpiar</button>
+                </div>
+            </div>
+
+            <!-- RESUMEN -->
+            <div id="auditoria-resumen" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;"></div>
+
+            <!-- TABLA -->
+            <div style="overflow-x: auto;">
+                <table id="tabla-auditoria">
+                    <thead>
+                        <tr>
+                            <th>Fecha / Hora</th>
+                            <th>Usuario</th>
+                            <th>Tipo de Evento</th>
+                            <th>Detalle</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditoria-table-body">
+                        <tr><td colspan="4" style="text-align:center; color:#aaa; padding: 30px;">Cargando registros...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p id="auditoria-count" style="font-size: 0.8rem; color: #888; margin-top: 10px; text-align: right;"></p>
+        </div>
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, deleteDoc, collection, getDocs, writeBatch, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, deleteDoc, collection, getDocs, writeBatch, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
         const app = initializeApp(firebaseConfig);
@@ -200,10 +249,132 @@
             Swal.fire('Éxito', 'Información actualizada.', 'success'); loadUsers();
         };
 
+        // ================================================================
+        // MÓDULO DE AUDITORÍA
+        // ================================================================
+        let todosLosRegistros = [];
+
+        const TIPO_LABELS = {
+            'inicio_sesion':            { label: '🔐 Inicio de Sesión',    color: '#1a73e8' },
+            'ver_pregunta':             { label: '👁️ Ver Pregunta',         color: '#34a853' },
+            'perder_foco':              { label: '⚠️ Perdió Foco',          color: '#fbbc04' },
+            'intento_inspeccionar':     { label: '🚨 Intento Inspeccionar', color: '#ea4335' },
+            'intento_captura_pantalla': { label: '📸 Intento Captura',      color: '#ea4335' },
+        };
+
+        async function cargarAuditoria() {
+            const body = document.getElementById('auditoria-table-body');
+            body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#aaa;padding:30px;">Cargando registros...</td></tr>`;
+            try {
+                const snap = await getDocs(query(collection(db, "auditoria_accesos"), orderBy("timestamp", "desc"), limit(500)));
+                todosLosRegistros = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderTablaAuditoria(todosLosRegistros);
+            } catch(e) {
+                console.error(e);
+                body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ea4335;padding:20px;">Error al cargar. Verifica los índices de Firestore.</td></tr>`;
+            }
+        }
+
+        function renderTablaAuditoria(registros) {
+            const body = document.getElementById('auditoria-table-body');
+            const countEl = document.getElementById('auditoria-count');
+            const resumenEl = document.getElementById('auditoria-resumen');
+            body.innerHTML = '';
+
+            if (registros.length === 0) {
+                body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#aaa;padding:30px;">No se encontraron registros.</td></tr>`;
+                countEl.innerText = '';
+                resumenEl.innerHTML = '';
+                return;
+            }
+
+            // Tarjetas de resumen
+            const conteos = {};
+            registros.forEach(r => { conteos[r.tipo] = (conteos[r.tipo] || 0) + 1; });
+            resumenEl.innerHTML = Object.entries(conteos).map(([tipo, count]) => {
+                const info = TIPO_LABELS[tipo] || { label: tipo, color: '#888' };
+                return `<div style="background:#fff;border:1px solid #eee;border-left:4px solid ${info.color};
+                    padding:8px 14px;border-radius:6px;font-size:0.82rem;">
+                    <strong style="color:${info.color}">${info.label}</strong><br>
+                    <span style="font-size:1.1rem;font-weight:bold;">${count}</span> registros
+                </div>`;
+            }).join('');
+
+            // Filas
+            registros.forEach(r => {
+                const info = TIPO_LABELS[r.tipo] || { label: r.tipo, color: '#888' };
+                const fecha = r.fecha_legible || (r.timestamp?.toDate ? r.timestamp.toDate().toLocaleString('es-EC') : '—');
+                let detalle = '—';
+                if (r.tipo === 'ver_pregunta') {
+                    detalle = `<strong>${r.materia || ''}</strong> | Modo: ${r.modo || ''} | #${r.pregunta_num || ''}: "${(r.pregunta_texto || '').substring(0,50)}..."`;
+                } else if (r.tipo === 'perder_foco') {
+                    detalle = `Motivo: ${r.motivo || '—'}`;
+                } else if (r.tipo === 'intento_inspeccionar') {
+                    detalle = `Tecla: ${r.tecla || '—'}`;
+                }
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-size:0.8rem;white-space:nowrap;">${fecha}</td>
+                    <td style="font-size:0.8rem;">${r.usuario || '—'}</td>
+                    <td><span style="background:${info.color}20;color:${info.color};padding:3px 8px;border-radius:20px;font-size:0.78rem;font-weight:600;white-space:nowrap;">${info.label}</span></td>
+                    <td style="font-size:0.8rem;">${detalle}</td>`;
+                body.appendChild(tr);
+            });
+
+            countEl.innerText = `Mostrando ${registros.length} registros`;
+        }
+
+        function filtrarAuditoria() {
+            const emailFiltro = document.getElementById('filtro-email').value.trim().toLowerCase();
+            const tipoFiltro = document.getElementById('filtro-tipo').value;
+            let resultado = todosLosRegistros;
+            if (emailFiltro) resultado = resultado.filter(r => (r.usuario || '').toLowerCase().includes(emailFiltro));
+            if (tipoFiltro) resultado = resultado.filter(r => r.tipo === tipoFiltro);
+            renderTablaAuditoria(resultado);
+        }
+
+        function exportarAExcel() {
+            const emailFiltro = document.getElementById('filtro-email').value.trim().toLowerCase();
+            const tipoFiltro = document.getElementById('filtro-tipo').value;
+            let datos = todosLosRegistros;
+            if (emailFiltro) datos = datos.filter(r => (r.usuario || '').toLowerCase().includes(emailFiltro));
+            if (tipoFiltro) datos = datos.filter(r => r.tipo === tipoFiltro);
+            if (datos.length === 0) return Swal.fire('Sin datos', 'No hay registros para exportar.', 'warning');
+
+            const filas = datos.map(r => ({
+                'Fecha / Hora':   r.fecha_legible || '—',
+                'Usuario':        r.usuario || '—',
+                'Nombre':         r.nombre || '—',
+                'Tipo de Evento': TIPO_LABELS[r.tipo]?.label || r.tipo,
+                'Materia':        r.materia || '—',
+                'Modo':           r.modo || '—',
+                'Pregunta #':     r.pregunta_num || '—',
+                'Texto Pregunta': r.pregunta_texto || '—',
+                'Motivo/Detalle': r.motivo || r.tecla || '—',
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(filas);
+            ws['!cols'] = [{ wch:22 },{ wch:30 },{ wch:25 },{ wch:25 },{ wch:20 },{ wch:12 },{ wch:10 },{ wch:50 },{ wch:20 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Auditoría');
+            const fecha = new Date().toLocaleDateString('es-EC').replace(/\//g, '-');
+            XLSX.writeFile(wb, `Auditoria_UNEMI_${fecha}.xlsx`);
+        }
+
+        document.getElementById('btn-filtrar').onclick = filtrarAuditoria;
+        document.getElementById('btn-exportar-excel').onclick = exportarAExcel;
+        document.getElementById('btn-limpiar-filtros').onclick = () => {
+            document.getElementById('filtro-email').value = '';
+            document.getElementById('filtro-tipo').value = '';
+            renderTablaAuditoria(todosLosRegistros);
+        };
+
         window.changeTab = (id) => {
-            document.getElementById('tab-excel').classList.toggle('hidden', id !== 'tab-excel');
-            document.getElementById('tab-users').classList.toggle('hidden', id !== 'tab-users');
-            if(id === 'tab-users') loadUsers();
+            ['tab-excel', 'tab-users', 'tab-auditoria'].forEach(t => {
+                document.getElementById(t).classList.toggle('hidden', t !== id);
+            });
+            if (id === 'tab-users') loadUsers();
+            if (id === 'tab-auditoria') cargarAuditoria();
         };
 
         document.getElementById('btn-admin-logout').onclick = () => {
