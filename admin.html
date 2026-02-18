@@ -810,7 +810,6 @@
                 return;
             }
             materiaActual = materiaId;
-            paginaActual = 1;
 
             const wrap = document.getElementById('tabla-preguntas-wrap');
             wrap.innerHTML = `<div class="loading-preguntas"><div class="spinner"></div> Cargando preguntas de <strong>${getNombreMateria(materiaId)}</strong>...</div>`;
@@ -935,13 +934,11 @@
         // Buscar en tiempo real
         document.getElementById('filtro-buscar').addEventListener('input', () => {
             if (todasLasPreguntas.length > 0) {
-                paginaActual = 1;
                 renderTablaPreguntas();
             }
         });
         document.getElementById('filtro-cantidad').addEventListener('change', () => {
             if (todasLasPreguntas.length > 0) {
-                paginaActual = 1;
                 renderTablaPreguntas();
             }
         });
