@@ -31,19 +31,42 @@
             <label style="font-weight: bold; display: block; margin-bottom: 5px;">Materia</label>
             <select id="subject-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;"></select>
         </div>
-        <div style="text-align: left; margin-bottom: 20px;">
+        <div style="text-align: left; margin-bottom: 15px;">
             <label style="font-weight: bold; display: block; margin-bottom: 5px;">Modo</label>
             <select id="mode-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
                 <option value="exam">📝 Examen (20 Preguntas)</option>
-                <option value="study">📚 Estudio (Banco de peguntas)</option>
+                <option value="study">📚 Estudio (Banco de preguntas)</option>
             </select>
         </div>
+
+        <!-- TIEMPO: Examen → 20/30/60 min | Estudio → 20/30/60 min + Sin límite -->
+        <div id="tiempo-container" style="text-align: left; margin-bottom: 15px;">
+            <label style="font-weight: bold; display: block; margin-bottom: 5px;">⏱ Tiempo límite</label>
+            <select id="tiempo-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
+                <option value="20">20 minutos</option>
+                <option value="30">30 minutos</option>
+                <option value="60">60 minutos</option>
+                <!-- Esta opción solo se muestra en modo Estudio -->
+                <option id="opcion-sin-limite" value="0" style="display:none;">♾ Sin límite de tiempo</option>
+            </select>
+        </div>
+
+        <!-- CANTIDAD: Solo visible en modo Estudio -->
+        <div id="cantidad-container" style="text-align: left; margin-bottom: 20px; display: none;">
+            <label style="font-weight: bold; display: block; margin-bottom: 5px;">📋 Cantidad de preguntas</label>
+            <select id="cantidad-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
+                <option value="20">20 preguntas</option>
+                <option value="todas">Todas las preguntas</option>
+            </select>
+        </div>
+
         <button id="btn-start" class="btn-primary" disabled>Selecciona una materia</button>
         <p id="admin-link-container" class="hidden" style="display: none;"><a href="admin.html" style="font-size: 0.8rem; color: #888; text-decoration: none; margin-top: 15px; display: inline-block;">Panel Administrativo</a></p>
     </div>
 
     <div class="container hidden" id="quiz-screen">
-        <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 15px;">
+            <span id="timer-label" style="font-size: 0.85rem; color: #888; display: none;"></span>
             <div id="timer-display" style="font-weight: bold; color: #d93025; font-size: 1.1rem;">00:00</div>
         </div>
         <div id="question-text" style="font-weight: bold; text-align: left; margin-bottom: 20px; font-size: 1.1rem;"></div>
