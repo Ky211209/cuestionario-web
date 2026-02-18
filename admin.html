@@ -517,15 +517,9 @@
                         <option value="">— Selecciona una materia —</option>
                     </select>
                 </div>
-                <div class="filtro-group" style="max-width:130px;">
+                <div class="filtro-group" style="max-width:150px;">
                     <label><i class="fas fa-eye"></i> Ver por página</label>
-                    <select id="filtro-cantidad">
-                        <option value="10">10 preguntas</option>
-                        <option value="20" selected>20 preguntas</option>
-                        <option value="50">50 preguntas</option>
-                        <option value="100">100 preguntas</option>
-                        <option value="0">Todas</option>
-                    </select>
+                    <input type="number" id="filtro-cantidad" value="20" min="1" placeholder="Ej: 20" style="width:100%; padding:9px 12px; border-radius:7px; border:1.5px solid #ddd; font-size:0.88rem; background:white; color:#333;">
                 </div>
                 <div class="filtro-group">
                     <label><i class="fas fa-search"></i> Buscar texto</label>
@@ -796,8 +790,6 @@
 
         let todasLasPreguntas = [];   // cache de la materia cargada
         let materiaActual = '';
-        let paginaActual = 1;
-        let preguntasPorPagina = 20;
         let respuestaSeleccionada = -1;
 
         const letras = ['A', 'B', 'C', 'D'];
@@ -838,10 +830,9 @@
         // ── RENDER TABLA ────────────────────────────────────────────────
         function renderTablaPreguntas() {
             const busqueda = document.getElementById('filtro-buscar').value.trim().toLowerCase();
-            const cantidadVal = document.getElementById('filtro-cantidad').value;
-            preguntasPorPagina = cantidadVal === '0' ? 0 : (parseInt(cantidadVal) || 20);
+            const cantidadVal = parseInt(document.getElementById('filtro-cantidad').value) || 20;
 
-            // Filtrar
+            // Filtrar por búsqueda de texto
             let filtradas = todasLasPreguntas;
             if (busqueda) {
                 filtradas = filtradas.filter(p =>
@@ -850,6 +841,9 @@
                     (p.explicacion_correcta || '').toLowerCase().includes(busqueda)
                 );
             }
+
+            // Mostrar exactamente las N primeras que el usuario indicó
+            const preguntasAMostrar = filtradas.slice(0, cantidadVal);
 
             // Stats
             const statsEl = document.getElementById('crud-stats');
@@ -860,31 +854,21 @@
                     <div class="stat-label">Total en BD</div>
                 </div>
                 <div class="stat-card" style="border-left-color:#34a853;">
-                    <div class="stat-num" style="color:#34a853;">${filtradas.length}</div>
-                    <div class="stat-label">Encontradas</div>
+                    <div class="stat-num" style="color:#34a853;">${preguntasAMostrar.length}</div>
+                    <div class="stat-label">Mostrando</div>
                 </div>
                 <div class="stat-card" style="border-left-color:#fbbc04;">
-                    <div class="stat-num" style="color:#856404;">${getNombreMateria(materiaActual)}</div>
+                    <div class="stat-num" style="color:#856404; font-size:1rem;">${getNombreMateria(materiaActual)}</div>
                     <div class="stat-label">Materia activa</div>
                 </div>
             `;
 
-            // Paginación
-            let paginadas = filtradas;
-            let totalPaginas = 1;
-
-            if (preguntasPorPagina > 0) {
-                totalPaginas = Math.ceil(filtradas.length / preguntasPorPagina);
-                if (paginaActual > totalPaginas) paginaActual = 1;
-                const desde = (paginaActual - 1) * preguntasPorPagina;
-                paginadas = filtradas.slice(desde, desde + preguntasPorPagina);
-            }
-
             const wrap = document.getElementById('tabla-preguntas-wrap');
+            const paginacionEl = document.getElementById('crud-paginacion');
 
-            if (paginadas.length === 0) {
+            if (preguntasAMostrar.length === 0) {
                 wrap.innerHTML = `<div class="empty-state"><i class="fas fa-search"></i><p>No se encontraron preguntas${busqueda ? ` con "<strong>${busqueda}</strong>"` : ''}.</p></div>`;
-                document.getElementById('crud-paginacion').style.display = 'none';
+                paginacionEl.style.display = 'none';
                 return;
             }
 
@@ -902,10 +886,8 @@
                     <tbody>
             `;
 
-            const globalOffset = preguntasPorPagina > 0 ? (paginaActual - 1) * preguntasPorPagina : 0;
-
-            paginadas.forEach((p, i) => {
-                const num = globalOffset + i + 1;
+            preguntasAMostrar.forEach((p, i) => {
+                const num = i + 1;
                 const resp = parseInt(p.respuesta ?? -1);
                 const opciones = p.opciones || [];
 
@@ -945,47 +927,10 @@
             html += `</tbody></table>`;
             wrap.innerHTML = html;
 
-            // Render paginación
-            if (preguntasPorPagina > 0 && totalPaginas > 1) {
-                renderPaginacion(totalPaginas, filtradas.length);
-            } else if (preguntasPorPagina > 0 && totalPaginas === 1) {
-                // 1 sola página: mostrar contador sin botones de navegación
-                const el = document.getElementById('crud-paginacion');
-                el.style.display = 'flex';
-                el.innerHTML = `<span class="info-pagina">Mostrando ${paginadas.length} de ${filtradas.length} preguntas</span>`;
-            } else {
-                // Modo "todas"
-                const el = document.getElementById('crud-paginacion');
-                el.style.display = 'flex';
-                el.innerHTML = `<span class="info-pagina">Mostrando todas: ${filtradas.length} preguntas</span>`;
-            }
+            // Contador simple — sin paginación
+            paginacionEl.style.display = 'flex';
+            paginacionEl.innerHTML = `<span class="info-pagina">Mostrando ${preguntasAMostrar.length} de ${filtradas.length} preguntas en BD</span>`;
         }
-
-        function renderPaginacion(totalPaginas, totalItems) {
-            const el = document.getElementById('crud-paginacion');
-            el.style.display = 'flex';
-            let html = '';
-            html += `<button onclick="irPagina(${paginaActual - 1})" ${paginaActual === 1 ? 'disabled' : ''}><i class="fas fa-chevron-left"></i></button>`;
-
-            // Mostrar páginas con ellipsis
-            for (let p = 1; p <= totalPaginas; p++) {
-                if (p === 1 || p === totalPaginas || (p >= paginaActual - 2 && p <= paginaActual + 2)) {
-                    html += `<button onclick="irPagina(${p})" class="${p === paginaActual ? 'activa' : ''}">${p}</button>`;
-                } else if (p === paginaActual - 3 || p === paginaActual + 3) {
-                    html += `<span style="padding:0 5px;color:#aaa;">…</span>`;
-                }
-            }
-
-            html += `<button onclick="irPagina(${paginaActual + 1})" ${paginaActual === totalPaginas ? 'disabled' : ''}><i class="fas fa-chevron-right"></i></button>`;
-            html += `<span class="info-pagina">Pág. ${paginaActual} de ${totalPaginas} · ${totalItems} preguntas</span>`;
-            el.innerHTML = html;
-        }
-
-        window.irPagina = (p) => {
-            paginaActual = p;
-            renderTablaPreguntas();
-            window.scrollTo({ top: 300, behavior: 'smooth' });
-        };
 
         // Buscar en tiempo real
         document.getElementById('filtro-buscar').addEventListener('input', () => {
@@ -1353,7 +1298,40 @@
         };
 
         document.getElementById('btn-admin-logout').onclick = () => {
-            if (confirm("¿Seguro que desea salir?")) signOut(auth).then(() => location.href = 'index.html');
+            Swal.fire({
+                title: 'Cerrar Sesión',
+                html: `
+                    <div style="text-align:center; padding: 10px 0;">
+                        <i class="fas fa-sign-out-alt" style="font-size:2.5rem; color:#ea4335; margin-bottom:12px; display:block;"></i>
+                        <p style="color:#444; font-size:0.95rem; margin:0;">
+                            ¿Estás seguro de que deseas cerrar tu sesión del <strong>Panel Administrativo</strong>?
+                        </p>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-sign-out-alt"></i> Sí, cerrar sesión',
+                cancelButtonText: '<i class="fas fa-times"></i> Cancelar',
+                confirmButtonColor: '#ea4335',
+                cancelButtonColor: '#5f6368',
+                reverseButtons: true,
+                focusCancel: true,
+                customClass: {
+                    popup: 'swal-logout-popup'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Cerrando sesión...',
+                        text: 'Hasta pronto.',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false,
+                        timerProgressBar: true
+                    }).then(() => {
+                        signOut(auth).then(() => location.href = 'index.html');
+                    });
+                }
+            });
         };
 
     </script>
