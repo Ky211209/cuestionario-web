@@ -517,16 +517,9 @@
                         <option value="">— Selecciona una materia —</option>
                     </select>
                 </div>
-                <div class="filtro-group" style="max-width:200px;">
-                    <label><i class="fas fa-eye"></i> Ver por página</label>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <input type="number" id="filtro-cantidad" value="20" min="1" placeholder="Ej: 20" 
-                               style="width:100%; padding:9px 12px; border-radius:7px; border:1.5px solid #ddd; font-size:0.88rem; background:white; color:#333;">
-                    </div>
-                    <label style="display:flex; align-items:center; gap:6px; margin-top:6px; cursor:pointer; text-transform:none; font-size:0.82rem; font-weight:600; color:#1a73e8; letter-spacing:0;">
-                        <input type="checkbox" id="check-todas" style="width:15px; height:15px; cursor:pointer; accent-color:#1a73e8;">
-                        Mostrar todas (paginado)
-                    </label>
+                <div class="filtro-group" style="max-width:180px;">
+                    <label><i class="fas fa-eye"></i> Preguntas por página</label>
+                    <input type="number" id="filtro-cantidad" value="20" min="1" placeholder="Ej: 20" style="width:100%; padding:9px 12px; border-radius:7px; border:1.5px solid #ddd; font-size:0.88rem; background:white; color:#333;">
                 </div>
                 <div class="filtro-group">
                     <label><i class="fas fa-search"></i> Buscar texto</label>
@@ -835,11 +828,11 @@
 
         // ── RENDER TABLA ────────────────────────────────────────────────
         let paginaActual = 1;
+        const SECCION_SIZE = 10; // cuántas se muestran por sección cuando hay paginación
 
         function renderTablaPreguntas() {
             const busqueda = document.getElementById('filtro-buscar').value.trim().toLowerCase();
-            const mostrarTodas = document.getElementById('check-todas').checked;
-            const itemsPorPagina = mostrarTodas ? 20 : (parseInt(document.getElementById('filtro-cantidad').value) || 20);
+            const cantidadVal = parseInt(document.getElementById('filtro-cantidad').value) || 20;
 
             // Filtrar por búsqueda
             let filtradas = todasLasPreguntas;
@@ -851,11 +844,27 @@
                 );
             }
 
-            // Paginación siempre activa
-            const totalPaginas = Math.ceil(filtradas.length / itemsPorPagina);
-            if (paginaActual > totalPaginas) paginaActual = 1;
-            const desde = (paginaActual - 1) * itemsPorPagina;
-            const preguntasAMostrar = filtradas.slice(desde, desde + itemsPorPagina);
+            // Las preguntas a considerar (las primeras N pedidas, o todas si checkbox)
+            const usarTodas = document.getElementById('filtro-cantidad').value === '' ||
+                              cantidadVal >= filtradas.length;
+            const pool = filtradas.slice(0, cantidadVal); // las N preguntas solicitadas
+
+            let preguntasAMostrar;
+            let totalPaginas = 1;
+            let desde = 0;
+
+            if (cantidadVal < 20) {
+                // Menos de 20: mostrar todas las N directamente, sin paginar
+                paginaActual = 1;
+                preguntasAMostrar = pool;
+                totalPaginas = 1;
+            } else {
+                // 20 o más: dividir las N preguntas en secciones de SECCION_SIZE
+                totalPaginas = Math.ceil(pool.length / SECCION_SIZE);
+                if (paginaActual > totalPaginas) paginaActual = 1;
+                desde = (paginaActual - 1) * SECCION_SIZE;
+                preguntasAMostrar = pool.slice(desde, desde + SECCION_SIZE);
+            }
 
             // Stats
             const statsEl = document.getElementById('crud-stats');
@@ -866,8 +875,8 @@
                     <div class="stat-label">Total en BD</div>
                 </div>
                 <div class="stat-card" style="border-left-color:#34a853;">
-                    <div class="stat-num" style="color:#34a853;">${filtradas.length}</div>
-                    <div class="stat-label">Encontradas</div>
+                    <div class="stat-num" style="color:#34a853;">${pool.length}</div>
+                    <div class="stat-label">Solicitadas</div>
                 </div>
                 <div class="stat-card" style="border-left-color:#fbbc04;">
                     <div class="stat-num" style="color:#856404; font-size:1rem;">${getNombreMateria(materiaActual)}</div>
@@ -884,9 +893,6 @@
                 return;
             }
 
-            // Número global para que continúe entre páginas (1, 2, 3... 21, 22...)
-            const globalOffset = desde;
-
             // Construir tabla
             let html = `
                 <table id="tabla-preguntas">
@@ -897,15 +903,13 @@
                             <th>Explicación</th>
                             <th style="width:110px;">Acciones</th>
                         </tr>
-                    </thead>
-                    <tbody>
+                    </thead><tbody>
             `;
 
             preguntasAMostrar.forEach((p, i) => {
-                const num = globalOffset + i + 1;
+                const num = desde + i + 1;
                 const resp = parseInt(p.respuesta ?? -1);
                 const opciones = p.opciones || [];
-
                 const opcionesHtml = opciones.map((op, idx) => `
                     <div class="opcion-mini ${idx === resp ? 'correcta' : ''}">
                         ${idx === resp ? '<i class="fas fa-check" style="font-size:0.7rem;margin-right:3px;"></i>' : ''}
@@ -940,12 +944,10 @@
             html += `</tbody></table>`;
             wrap.innerHTML = html;
 
-            // ── PAGINACIÓN ─────────────────────────────────────────────
+            // Paginación
             paginacionEl.style.display = 'flex';
-
             if (totalPaginas > 1) {
-                let btns = '';
-                btns += `<button onclick="irPagina(${paginaActual - 1})" ${paginaActual === 1 ? 'disabled' : ''}><i class="fas fa-chevron-left"></i></button>`;
+                let btns = `<button onclick="irPagina(${paginaActual - 1})" ${paginaActual === 1 ? 'disabled' : ''}><i class="fas fa-chevron-left"></i></button>`;
                 for (let p = 1; p <= totalPaginas; p++) {
                     if (p === 1 || p === totalPaginas || (p >= paginaActual - 2 && p <= paginaActual + 2)) {
                         btns += `<button onclick="irPagina(${p})" class="${p === paginaActual ? 'activa' : ''}">${p}</button>`;
@@ -954,10 +956,10 @@
                     }
                 }
                 btns += `<button onclick="irPagina(${paginaActual + 1})" ${paginaActual === totalPaginas ? 'disabled' : ''}><i class="fas fa-chevron-right"></i></button>`;
-                btns += `<span class="info-pagina">Página ${paginaActual} de ${totalPaginas} · ${filtradas.length} preguntas</span>`;
+                btns += `<span class="info-pagina">Sección ${paginaActual} de ${totalPaginas} · ${pool.length} preguntas solicitadas</span>`;
                 paginacionEl.innerHTML = btns;
             } else {
-                paginacionEl.innerHTML = `<span class="info-pagina">Mostrando ${preguntasAMostrar.length} de ${filtradas.length} preguntas</span>`;
+                paginacionEl.innerHTML = `<span class="info-pagina">Mostrando ${preguntasAMostrar.length} preguntas</span>`;
             }
         }
 
@@ -973,12 +975,6 @@
         });
         document.getElementById('filtro-cantidad').addEventListener('change', () => {
             if (todasLasPreguntas.length > 0) { paginaActual = 1; renderTablaPreguntas(); }
-        });
-        // Checkbox "Todas"
-        document.getElementById('check-todas').addEventListener('change', (e) => {
-            document.getElementById('filtro-cantidad').disabled = e.target.checked;
-            paginaActual = 1;
-            if (todasLasPreguntas.length > 0) renderTablaPreguntas();
         });
 
         // ── MODAL ───────────────────────────────────────────────────────
