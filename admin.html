@@ -566,14 +566,30 @@
             <h3>Gestión de Alumnos (CRUD)</h3>
             <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
                 <input type="email" id="edit-email" placeholder="correo@unemi.edu.ec" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 10px;">
-                <select id="edit-limit" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 10px;">
-                    <option value="1">1 Dispositivo</option>
-                    <option value="2">2 Dispositivos</option>
-                </select>
-                <button id="btn-update-user" class="btn-primary">Guardar / Actualizar Alumno</button>
+                
+                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                    <select id="edit-limit" style="flex:1; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                        <option value="1">1 Dispositivo</option>
+                        <option value="2">2 Dispositivos</option>
+                    </select>
+                    <select id="edit-rol" style="flex:1; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                        <option value="usuario">👤 Usuario</option>
+                        <option value="admin">🔑 Administrador</option>
+                    </select>
+                </div>
+
+                <!-- Materias: solo visible si rol = usuario -->
+                <div id="materias-asignacion" style="margin-bottom:10px;">
+                    <label style="font-size:0.82rem; font-weight:700; color:#5f6368; display:block; margin-bottom:6px; text-transform:uppercase;">Materias con acceso</label>
+                    <div id="materias-checkboxes" style="display:grid; grid-template-columns:1fr 1fr; gap:6px; background:white; border:1px solid #ddd; border-radius:6px; padding:10px;">
+                        <!-- Se llenan dinámicamente -->
+                    </div>
+                </div>
+
+                <button id="btn-update-user" class="btn-primary" style="width:100%;">Guardar / Actualizar Alumno</button>
             </div>
             <table>
-                <thead><tr><th>Correo</th><th>Disp.</th><th>Acciones</th></tr></thead>
+                <thead><tr><th>Correo</th><th>Rol</th><th>Disp.</th><th>Acciones</th></tr></thead>
                 <tbody id="user-table-body"></tbody>
             </table>
         </div>
@@ -1196,33 +1212,101 @@
         // ================================================================
         //  MÓDULO USUARIOS
         // ================================================================
-        async function loadUsers() {
-            const body = document.getElementById('user-table-body');
-            body.innerHTML = "";
-            const snap = await getDocs(collection(db, "usuarios_seguros"));
-            snap.forEach(d => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${d.id}</td><td>${d.data().max_dispositivos}</td><td>
-                    <button onclick="window.prepareEdit('${d.id}', ${d.data().max_dispositivos})" class="btn-edit"><i class="fas fa-edit"></i></button>
-                    <button onclick="window.confirmDelete('${d.id}')" class="btn-delete"><i class="fas fa-trash"></i></button></td>`;
-                body.appendChild(tr);
-            });
+
+        // Llenar checkboxes de materias en el formulario
+        function llenarCheckboxesMaterias(materiasSeleccionadas = []) {
+            const cont = document.getElementById('materias-checkboxes');
+            cont.innerHTML = materias.map(m => `
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem; cursor:pointer; padding:4px;">
+                    <input type="checkbox" value="${m.id}" 
+                           ${materiasSeleccionadas.includes(m.id) ? 'checked' : ''}
+                           style="width:14px; height:14px; accent-color:#1a73e8;">
+                    ${m.nombre}
+                </label>
+            `).join('');
         }
 
-        window.prepareEdit = (email, lim) => {
+        // Mostrar/ocultar materias según rol
+        document.getElementById('edit-rol').addEventListener('change', (e) => {
+            document.getElementById('materias-asignacion').style.display =
+                e.target.value === 'admin' ? 'none' : 'block';
+        });
+
+        async function loadUsers() {
+            const body = document.getElementById('user-table-body');
+            body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:20px;">Cargando...</td></tr>';
+            llenarCheckboxesMaterias();
+            const snap = await getDocs(collection(db, "usuarios_seguros"));
+            body.innerHTML = '';
+            snap.forEach(d => {
+                const data = d.data();
+                const rol = data.rol || 'usuario';
+                const rolBadge = rol === 'admin'
+                    ? `<span style="background:#e8f0fe;color:#1a73e8;padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:700;">🔑 Admin</span>`
+                    : `<span style="background:#f0f4f0;color:#5f6368;padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:700;">👤 Usuario</span>`;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-size:0.82rem;">${d.id}</td>
+                    <td>${rolBadge}</td>
+                    <td>${data.max_dispositivos || 1}</td>
+                    <td>
+                        <button onclick="window.prepareEdit('${d.id}')" class="btn-edit" title="Editar"><i class="fas fa-edit"></i></button>
+                        <button onclick="window.confirmDelete('${d.id}')" class="btn-delete" title="Eliminar"><i class="fas fa-trash"></i></button>
+                    </td>`;
+                body.appendChild(tr);
+            });
+            if (snap.empty) body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:20px;">No hay alumnos registrados.</td></tr>';
+        }
+
+        window.prepareEdit = async (email) => {
             document.getElementById('edit-email').value = email;
-            document.getElementById('edit-limit').value = lim;
+            try {
+                const snap = await getDocs(collection(db, "usuarios_seguros"));
+                const docData = snap.docs.find(d => d.id === email)?.data() || {};
+                document.getElementById('edit-limit').value = docData.max_dispositivos || 1;
+                const rol = docData.rol || 'usuario';
+                document.getElementById('edit-rol').value = rol;
+                document.getElementById('materias-asignacion').style.display = rol === 'admin' ? 'none' : 'block';
+                llenarCheckboxesMaterias(docData.materias || []);
+            } catch(e) {
+                llenarCheckboxesMaterias([]);
+            }
+            document.getElementById('edit-email').scrollIntoView({ behavior: 'smooth' });
         };
+
         window.confirmDelete = (email) => {
-            Swal.fire({ title: '¿Eliminar usuario?', icon: 'warning', showCancelButton: true }).then(async (r) => {
+            Swal.fire({ title: '¿Eliminar usuario?', icon: 'warning', showCancelButton: true,
+                confirmButtonText: 'Sí, eliminar', confirmButtonColor: '#ea4335' })
+            .then(async (r) => {
                 if (r.isConfirmed) { await deleteDoc(doc(db, "usuarios_seguros", email)); loadUsers(); }
             });
         };
+
         document.getElementById('btn-update-user').onclick = async () => {
             const email = document.getElementById('edit-email').value.trim().toLowerCase();
-            if (!email) return;
-            await setDoc(doc(db, "usuarios_seguros", email), { max_dispositivos: parseInt(document.getElementById('edit-limit').value) });
-            Swal.fire('Éxito', 'Información actualizada.', 'success'); loadUsers();
+            if (!email) return Swal.fire('Atención', 'Escribe el correo del alumno.', 'warning');
+            const rol = document.getElementById('edit-rol').value;
+            const maxDisp = parseInt(document.getElementById('edit-limit').value);
+
+            // Recoger materias seleccionadas (solo si es usuario)
+            let materiasAsignadas = [];
+            if (rol === 'usuario') {
+                materiasAsignadas = Array.from(
+                    document.querySelectorAll('#materias-checkboxes input[type=checkbox]:checked')
+                ).map(cb => cb.value);
+                if (materiasAsignadas.length === 0) {
+                    return Swal.fire('Atención', 'Selecciona al menos una materia para este usuario.', 'warning');
+                }
+            }
+
+            const datos = { max_dispositivos: maxDisp, rol };
+            if (rol === 'usuario') datos.materias = materiasAsignadas;
+
+            await setDoc(doc(db, "usuarios_seguros", email), datos);
+            Swal.fire({ icon: 'success', title: '¡Guardado!',
+                text: `${email} actualizado como ${rol === 'admin' ? 'Administrador' : 'Usuario'}.`,
+                timer: 2000, showConfirmButton: false });
+            loadUsers();
         };
 
         // ================================================================
