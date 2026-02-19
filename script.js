@@ -270,7 +270,7 @@ async function cargarMaterias() {
                     break;
                 }
             } catch (e) {
-                continue; // Intentar siguiente ruta
+                continue;
             }
         }
 
@@ -278,16 +278,44 @@ async function cargarMaterias() {
             throw new Error('No se encontró el archivo config-materias.json en ninguna ruta');
         }
 
+        // ── FILTRAR MATERIAS SEGÚN ROL ──────────────────────────────
+        let materiasVisibles = data.materias.filter(m => m.activa);
+
+        // Solo si NO es admin, filtrar por materias asignadas en Firebase
+        const esAdmin = currentUserEmail === ADMIN_EMAIL;
+        if (!esAdmin) {
+            try {
+                const userDoc = await getDoc(doc(db, "usuarios_seguros", currentUserEmail));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    const rol = userData.rol || 'usuario';
+                    if (rol !== 'admin' && userData.materias && userData.materias.length > 0) {
+                        materiasVisibles = materiasVisibles.filter(m => userData.materias.includes(m.id));
+                    }
+                }
+            } catch(e) {
+                console.error('Error obteniendo rol del usuario:', e);
+            }
+        }
+        // ────────────────────────────────────────────────────────────
+
         const select = document.getElementById('subject-select');
         const btnStart = document.getElementById('btn-start');
 
         select.innerHTML = '<option value="">-- Selecciona Materia --</option>';
-        data.materias.forEach(m => {
+        materiasVisibles.forEach(m => {
             const opt = document.createElement('option');
-            opt.value = m.id; 
+            opt.value = m.id;
             opt.textContent = m.nombre;
             select.appendChild(opt);
         });
+
+        if (materiasVisibles.length === 0) {
+            select.innerHTML = '<option value="">Sin materias asignadas</option>';
+            btnStart.disabled = true;
+            btnStart.textContent = "Sin acceso a materias";
+            return;
+        }
 
         select.onchange = () => {
             if (select.value === "") {
@@ -310,15 +338,11 @@ async function cargarMaterias() {
 
         modeSelect.onchange = () => {
             if (modeSelect.value === 'study') {
-                // Modo Estudio: mostrar "Sin límite" y el selector de cantidad
                 opcionSinLimite.style.display = '';
                 cantidadContainer.style.display = 'block';
-                // Si estaba en 20/30/60, dejar como está; no forzar sin-límite
             } else {
-                // Modo Examen: ocultar "Sin límite" y el selector de cantidad
                 opcionSinLimite.style.display = 'none';
                 cantidadContainer.style.display = 'none';
-                // Si tenía "sin límite" seleccionado, resetear a 20 min
                 if (tiempoSelect.value === '0') tiempoSelect.value = '20';
             }
         };
