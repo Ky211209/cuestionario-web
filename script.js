@@ -867,18 +867,9 @@ function startTimer() {
         }, 1000);
 
     } else {
-        // ── CRONÓMETRO (sin límite) ───────────────────────────────────
-        label.style.display = 'block';
-        label.textContent = 'Tiempo transcurrido';
-        display.style.color = '#d93025';
-        startTime = Date.now();
-
-        timerInterval = setInterval(() => {
-            const elapsed = Date.now() - startTime;
-            const minutes = Math.floor(elapsed / 60000);
-            const seconds = Math.floor((elapsed % 60000) / 1000);
-            display.textContent = `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
-        }, 1000);
+        // ── SIN LÍMITE: ocultar timer completamente ───────────────────
+        label.style.display = 'none';
+        display.style.display = 'none';
     }
 }
 
