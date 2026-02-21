@@ -22,13 +22,6 @@ const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
-// FIX MÓVIL: capturar resultado al regresar de Google
-getRedirectResult(auth).catch(err => {
-    if (err && err.code !== 'auth/cancelled-popup-request') {
-        console.error('Error redirect:', err.code);
-    }
-});
-
 // ================================================================
 // MÓDULO DE SEGURIDAD
 // ================================================================
@@ -149,6 +142,18 @@ let selectedAnswers = [], timerInterval = null, tiempoLimiteSegundos = 0, tiempo
 // ================================================================
 let sesionInicializada = false;
 
+// FIX MÓVIL: procesar redirect ANTES de que onAuthStateChanged decida
+// En móvil la página se recarga completa al volver de Google
+getRedirectResult(auth).then(result => {
+    if (result && result.user) {
+        console.log('Login por redirect OK:', result.user.email);
+    }
+}).catch(err => {
+    if (err && err.code !== 'auth/cancelled-popup-request') {
+        console.warn('Redirect error:', err.code);
+    }
+});
+
 onAuthStateChanged(auth, async (user) => {
     const adminLinkContainer = document.getElementById('admin-link-container');
 
@@ -234,9 +239,8 @@ onAuthStateChanged(auth, async (user) => {
 async function cargarMaterias() {
     try {
         let data = null;
-        const _rutas = ['config-materias.json', './config-materias.json',
-            location.pathname.replace(/\/[^\/]*$/, '') + '/config-materias.json'];
-        for (const ruta of _rutas) {
+        for (const ruta of ['config-materias.json', './config-materias.json',
+            location.pathname.replace(/\/[^\/]*$/, '') + '/config-materias.json']) {
             try { const res = await fetch(ruta); if (res.ok) { data = await res.json(); break; } } catch(e) { continue; }
         }
         if (!data) { data = { materias: [
