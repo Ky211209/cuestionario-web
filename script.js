@@ -22,10 +22,18 @@ const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
-// ✅ FIX MÓVIL: Manejar resultado del redirect cuando regresa de Google
-getRedirectResult(auth).catch(err => {
-    if (err && err.code !== 'auth/cancelled-popup-request') {
-        console.error('Error redirect result:', err);
+// ✅ FIX MÓVIL: Procesar resultado cuando Google regresa al sitio tras redirect
+getRedirectResult(auth).then(result => {
+    // El usuario autenticado lo detecta onAuthStateChanged automáticamente
+    if (result && result.user) {
+        console.log('Redirect login exitoso:', result.user.email);
+    }
+}).catch(err => {
+    if (err && err.code !== 'auth/cancelled-popup-request' && err.code !== 'auth/null-user') {
+        console.error('Error en redirect result:', err.code, err.message);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon:'error', title:'Error al iniciar sesión', html:`Código: <code>${err.code}</code><br><small>${err.message}</small>`, confirmButtonText:'Entendido' });
+        }
     }
 });
 
