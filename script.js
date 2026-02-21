@@ -14,22 +14,31 @@ function getDeviceId() {
 const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+auth.useDeviceLanguage();
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: 'select_account' });
 
 // Capturar resultado del redirect de Google al volver a la página
 getRedirectResult(auth).then((result) => {
-    // El onAuthStateChanged se encarga del resto automáticamente
     if (result && result.user) {
         console.log('Redirect login exitoso:', result.user.email);
+        // onAuthStateChanged se encarga del flujo
     }
 }).catch((error) => {
-    if (error.code && error.code !== 'auth/no-current-user') {
-        console.error('Error en redirect:', error.code, error.message);
+    console.error('Error en redirect:', error.code, error.message);
+    if (error.code === 'auth/unauthorized-domain') {
+        Swal.fire({
+            icon: 'error',
+            title: 'Dominio no autorizado',
+            html: `El dominio no está autorizado en Firebase.<br><small style="color:#999">${error.code}</small>`,
+            confirmButtonText: 'Entendido'
+        });
+    } else if (error.code && error.code !== 'auth/no-current-user' && error.code !== 'auth/null-user') {
         Swal.fire({
             icon: 'error',
             title: 'Error al iniciar sesión',
-            html: `No se pudo completar el inicio de sesión.<br><small style="color:#999">${error.code}</small>`,
+            html: `No se pudo completar el inicio de sesión.<br><small style="color:#999">${error.code}: ${error.message}</small>`,
             confirmButtonText: 'Entendido'
         });
     }
@@ -1092,12 +1101,18 @@ document.getElementById('btn-header-return').onclick = () => {
 };
 
 document.getElementById('btn-login').onclick = () => {
-    document.getElementById('btn-login').textContent = 'Redirigiendo...';
-    document.getElementById('btn-login').disabled = true;
+    const btn = document.getElementById('btn-login');
+    btn.textContent = 'Redirigiendo...';
+    btn.disabled = true;
     signInWithRedirect(auth, provider).catch(err => {
         console.error('Error al redirigir:', err);
-        document.getElementById('btn-login').textContent = 'Acceder con Google';
-        document.getElementById('btn-login').disabled = false;
-        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        btn.textContent = 'Acceder con Google';
+        btn.disabled = false;
+        Swal.fire({ 
+            icon: 'error', 
+            title: 'Error al iniciar sesión',
+            html: `Código: <code>${err.code}</code><br><small>${err.message}</small>`,
+            confirmButtonText: 'Entendido'
+        });
     });
 };
