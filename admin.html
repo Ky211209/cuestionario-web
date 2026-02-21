@@ -1,1202 +1,1669 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Panel Admin - UNEMI</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 
-function getDeviceId() {
-    let id = localStorage.getItem('device_id');
-    if (!id) {
-        id = 'dev_' + Math.random().toString(36).substr(2, 12) + '_' + Date.now();
-        localStorage.setItem('device_id', id);
-    }
-    return id;
-}
+    <style>
+        /* ============================================================
+           ESTILOS EXCLUSIVOS DEL PANEL ADMIN - CRUD PREGUNTAS
+           ============================================================ */
 
-const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-auth.useDeviceLanguage();
-const db = getFirestore(app);
-const provider = new GoogleAuthProvider();
-provider.setCustomParameters({ prompt: 'select_account' });
+        /* Navegación de tabs mejorada */
+        .admin-nav {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
 
-// ================================================================
-// CONTROL DE ESTADO DE CARGA - Evita parpadeo en la pantalla de auth
-// durante la redirección de Google
-// ================================================================
-let redirectResultResuelto = false;
+        .tab-btn {
+            padding: 9px 18px;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.25s;
+            background: #f0f2f5;
+            color: #5f6368;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+        .tab-btn:hover { background: #e8f0fe; color: #1a73e8; border-color: #c5d8fb; }
+        .tab-btn.active { background: #1a73e8; color: white; border-color: #1a73e8; box-shadow: 0 3px 10px rgba(26,115,232,0.35); }
 
-// Mostrar pantalla de carga mientras se espera el resultado del redirect
-function mostrarPantallaCarga() {
-    const authScreen = document.getElementById('auth-screen');
-    authScreen.innerHTML = `
-        <div style="text-align:center; padding: 20px;">
-            <div style="font-size:2rem; margin-bottom:15px;">⏳</div>
-            <p style="color:#1a73e8; font-weight:600;">Verificando sesión...</p>
-            <p style="color:#888; font-size:0.85rem; margin-top:8px;">Por favor espera</p>
+        /* ---- FILTROS CRUD ---- */
+        .crud-filtros {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 10px;
+            margin-bottom: 18px;
+            border: 1px solid #e8e8e8;
+        }
+        .crud-filtros .filtro-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+            min-width: 140px;
+        }
+        .crud-filtros label { font-size: 0.77rem; font-weight: 700; color: #5f6368; text-transform: uppercase; letter-spacing: 0.04em; }
+        .crud-filtros select,
+        .crud-filtros input[type="number"] {
+            padding: 9px 12px;
+            border-radius: 7px;
+            border: 1.5px solid #ddd;
+            font-size: 0.88rem;
+            background: white;
+            color: #333;
+            transition: border-color 0.2s;
+            width: 100%;
+        }
+        .crud-filtros select:focus,
+        .crud-filtros input:focus { border-color: #1a73e8; outline: none; }
+
+        /* ---- STATS BANNER ---- */
+        .stats-banner {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .stat-card {
+            flex: 1;
+            min-width: 110px;
+            background: white;
+            border: 1px solid #e8e8e8;
+            border-left: 4px solid #1a73e8;
+            border-radius: 8px;
+            padding: 10px 14px;
+            text-align: center;
+        }
+        .stat-card .stat-num { font-size: 1.6rem; font-weight: 800; color: #1a73e8; line-height: 1; }
+        .stat-card .stat-label { font-size: 0.73rem; color: #888; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.03em; }
+
+        /* ---- TABLA PREGUNTAS ---- */
+        #tabla-preguntas-wrap { overflow-x: auto; }
+
+        #tabla-preguntas {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.84rem;
+        }
+        #tabla-preguntas thead tr {
+            background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%);
+            color: white;
+        }
+        #tabla-preguntas th {
+            padding: 12px 14px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+        }
+        #tabla-preguntas td {
+            padding: 11px 14px;
+            border-bottom: 1px solid #f0f0f0;
+            vertical-align: top;
+            color: #333;
+        }
+        #tabla-preguntas tbody tr:hover { background: #f5f9ff; }
+        #tabla-preguntas tbody tr:nth-child(even) { background: #fafafa; }
+        #tabla-preguntas tbody tr:nth-child(even):hover { background: #f0f6ff; }
+
+        .num-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            background: #e8f0fe;
+            color: #1a73e8;
+            border-radius: 6px;
+            font-weight: 800;
+            font-size: 0.8rem;
+        }
+
+        .td-pregunta { max-width: 280px; }
+        .td-pregunta .pregunta-texto {
+            font-weight: 600;
+            color: #202124;
+            line-height: 1.4;
+            margin-bottom: 6px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .td-pregunta .opciones-mini {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .opcion-mini {
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border-left: 3px solid #ddd;
+            color: #666;
+            background: #fafafa;
+        }
+        .opcion-mini.correcta {
+            border-left-color: #34a853;
+            background: #e8f5ec;
+            color: #1e7e34;
+            font-weight: 600;
+        }
+
+        .td-explicacion { max-width: 200px; }
+        .explicacion-preview {
+            font-size: 0.78rem;
+            color: #666;
+            font-style: italic;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* ---- ACCIONES ---- */
+        .acciones-celda { white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+        .btn-accion {
+            border: none;
+            padding: 7px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.82rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-editar { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+        .btn-editar:hover { background: #ffc107; color: white; }
+        .btn-eliminar { background: #fce8e6; color: #c5221f; border: 1px solid #ea4335; }
+        .btn-eliminar:hover { background: #ea4335; color: white; }
+
+        /* ---- PAGINACIÓN ---- */
+        .paginacion {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .paginacion button {
+            padding: 7px 14px;
+            border-radius: 7px;
+            border: 1.5px solid #ddd;
+            background: white;
+            color: #444;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .paginacion button:hover:not(:disabled) { border-color: #1a73e8; color: #1a73e8; background: #e8f0fe; }
+        .paginacion button.activa { background: #1a73e8; color: white; border-color: #1a73e8; }
+        .paginacion button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .paginacion .info-pagina { font-size: 0.82rem; color: #666; padding: 0 8px; }
+
+        /* ---- BOTÓN NUEVA PREGUNTA ---- */
+        .btn-nueva-pregunta {
+            background: linear-gradient(135deg, #34a853, #2d8f47);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.88rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.25s;
+            box-shadow: 0 3px 10px rgba(52,168,83,0.3);
+        }
+        .btn-nueva-pregunta:hover { background: linear-gradient(135deg, #2d8f47, #1e6b35); transform: translateY(-1px); box-shadow: 0 5px 15px rgba(52,168,83,0.35); }
+
+        /* ---- MODAL EDICIÓN ---- */
+        #modal-pregunta-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.55);
+            z-index: 9990;
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        #modal-pregunta-overlay.visible { display: flex; }
+
+        #modal-pregunta {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 680px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+            animation: modalIn 0.3s ease;
+        }
+
+        @keyframes modalIn {
+            from { opacity: 0; transform: translateY(-20px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        .modal-header h3 { font-size: 1.15rem; color: #1a73e8; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .modal-close {
+            background: #f0f2f5;
+            border: none;
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .modal-close:hover { background: #ea4335; color: white; }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #444;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .form-group textarea,
+        .form-group input[type="text"],
+        .form-group select {
+            width: 100%;
+            padding: 10px 13px;
+            border-radius: 8px;
+            border: 1.5px solid #ddd;
+            font-size: 0.9rem;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.2s;
+            background: #fafafa;
+        }
+        .form-group textarea:focus,
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: #1a73e8;
+            background: white;
+            outline: none;
+        }
+
+        .opciones-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .opcion-input-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .opcion-letra {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #1a73e8;
+            color: white;
+            font-weight: 800;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .respuesta-selector {
+            display: flex;
+            gap: 10px;
+        }
+        .respuesta-opcion {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 9px;
+            border-radius: 8px;
+            border: 2px solid #ddd;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            background: #fafafa;
+        }
+        .respuesta-opcion:hover { border-color: #1a73e8; background: #e8f0fe; }
+        .respuesta-opcion.seleccionada { background: #34a853; border-color: #34a853; color: white; }
+        .respuesta-opcion .letra-resp {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 800;
+        }
+        .respuesta-opcion:not(.seleccionada) .letra-resp { background: #1a73e8; color: white; }
+
+        .modal-footer {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 2px solid #f0f0f0;
+        }
+        .btn-cancelar {
+            background: #f0f2f5;
+            color: #5f6368;
+            padding: 11px 22px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .btn-cancelar:hover { background: #e0e0e0; }
+        .btn-guardar {
+            background: linear-gradient(135deg, #1a73e8, #1557b0);
+            color: white;
+            padding: 11px 28px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.9rem;
+            transition: all 0.25s;
+            box-shadow: 0 3px 10px rgba(26,115,232,0.35);
+        }
+        .btn-guardar:hover { transform: translateY(-1px); box-shadow: 0 5px 15px rgba(26,115,232,0.4); }
+
+        /* ---- LOADING ---- */
+        .loading-preguntas {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 50px;
+            gap: 12px;
+            color: #888;
+            font-size: 0.95rem;
+        }
+        .spinner { width: 28px; height: 28px; border: 3px solid #e0e0e0; border-top-color: #1a73e8; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ---- EMPTY STATE ---- */
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: #aaa;
+        }
+        .empty-state i { font-size: 3rem; margin-bottom: 12px; color: #ddd; display: block; }
+        .empty-state p { font-size: 0.95rem; }
+
+        /* Materia badge */
+        .materia-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            background: #e8f0fe;
+            color: #1a73e8;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .opciones-grid { grid-template-columns: 1fr; }
+            .respuesta-selector { flex-wrap: wrap; }
+        }
+
+        @media print {
+            body * { visibility: hidden !important; }
+            #pdf-content, #pdf-content * { visibility: visible !important; }
+            #pdf-content {
+                position: fixed !important;
+                top: 0; left: 0;
+                width: 100% !important;
+                padding: 20px 30px !important;
+                border: none !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                font-size: 12pt;
+            }
+            .pdf-pregunta { page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <i class="fa-solid fa-shield-halved" style="color:#1a73e8;"></i>
+            <h1>Panel Admin <span class="subtitle">UNEMI</span></h1>
         </div>
-    `;
-    authScreen.classList.remove('hidden');
-}
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <span id="admin-name" style="font-weight: bold; color: #1a73e8;"></span>
+            <button onclick="window.location.href='index.html'" class="btn-secondary">
+                <i class="fas fa-arrow-left"></i> Simulador
+            </button>
+            <button id="btn-admin-logout" class="btn-secondary">Cerrar Sesión</button>
+        </div>
+    </header>
 
-function restaurarPantallaLogin() {
-    const authScreen = document.getElementById('auth-screen');
-    authScreen.innerHTML = `
-        <h2>Bienvenido</h2>
-        <button id="btn-login" class="btn-primary" style="margin-top: 20px;">Acceder con Google</button>
-    `;
-    // Re-asignar el evento al nuevo botón
-    document.getElementById('btn-login').onclick = () => {
-        const btn = document.getElementById('btn-login');
-        btn.textContent = 'Redirigiendo...';
-        btn.disabled = true;
-        signInWithRedirect(auth, provider).catch(err => {
-            console.error('Error al redirigir:', err);
-            btn.textContent = 'Acceder con Google';
-            btn.disabled = false;
-            Swal.fire({ 
-                icon: 'error', 
-                title: 'Error al iniciar sesión',
-                html: `Código: <code>${err.code}</code><br><small>${err.message}</small>`,
-                confirmButtonText: 'Entendido'
-            });
-        });
-    };
-}
+    <div class="container" style="margin-top: 30px; max-width: 950px;">
+        <nav class="admin-nav">
+            <button onclick="changeTab('tab-preguntas')" id="btn-tab-preguntas" class="tab-btn active">
+                <i class="fas fa-list-ol"></i> Banco de Preguntas
+            </button>
+            <button onclick="changeTab('tab-excel')" id="btn-tab-excel" class="tab-btn">
+                <i class="fas fa-file-excel"></i> Cargar Excel
+            </button>
+            <button onclick="changeTab('tab-users')" id="btn-tab-users" class="tab-btn">
+                <i class="fas fa-users"></i> Alumnos
+            </button>
+            <button onclick="changeTab('tab-auditoria')" id="btn-tab-auditoria" class="tab-btn">
+                <i class="fas fa-clipboard-list"></i> Auditoría
+            </button>
+            <button onclick="changeTab('tab-imprimir')" id="btn-tab-imprimir" class="tab-btn">
+                <i class="fas fa-print"></i> Imprimir PDF
+            </button>
+        </nav>
 
-// Mostrar carga inmediatamente (antes de que getRedirectResult resuelva)
-mostrarPantallaCarga();
-
-// Timeout de seguridad: si getRedirectResult tarda más de 4 segundos,
-// forzar restauración del login para que no quede pegado
-const timeoutSeguridad = setTimeout(() => {
-    if (!redirectResultResuelto) {
-        console.warn('getRedirectResult tardó demasiado — forzando pantalla de login');
-        redirectResultResuelto = true;
-        restaurarPantallaLogin();
-    }
-}, 4000);
-
-// Capturar resultado del redirect de Google al volver a la página
-getRedirectResult(auth).then((result) => {
-    clearTimeout(timeoutSeguridad);
-    if (result && result.user) {
-        console.log('Redirect login exitoso:', result.user.email);
-        // onAuthStateChanged se encarga del flujo
-    }
-    redirectResultResuelto = true;
-}).catch((error) => {
-    clearTimeout(timeoutSeguridad);
-    redirectResultResuelto = true;
-    console.error('Error en redirect:', error.code, error.message);
-    if (error.code === 'auth/unauthorized-domain') {
-        restaurarPantallaLogin();
-        Swal.fire({
-            icon: 'error',
-            title: 'Dominio no autorizado',
-            html: `El dominio no está autorizado en Firebase.<br><small style="color:#999">${error.code}</small>`,
-            confirmButtonText: 'Entendido'
-        });
-    } else if (error.code && error.code !== 'auth/no-current-user' && error.code !== 'auth/null-user') {
-        restaurarPantallaLogin();
-        Swal.fire({
-            icon: 'error',
-            title: 'Error al iniciar sesión',
-            html: `No se pudo completar el inicio de sesión.<br><small style="color:#999">${error.code}: ${error.message}</small>`,
-            confirmButtonText: 'Entendido'
-        });
-    } else {
-        // Sin error real, simplemente restaurar login
-        restaurarPantallaLogin();
-    }
-});
-
-// ================================================================
-// MÓDULO DE SEGURIDAD
-// ================================================================
-let currentUserEmail = "";
-let currentUserName = "";
-let watermarkElement = null;
-let contentHidden = false;
-
-// --- 1. MARCA DE AGUA DISCRETA ---
-function crearMarcaDeAgua(email) {
-    if (watermarkElement) watermarkElement.remove();
-    // La marca se insertará dentro del quiz en renderQuestion()
-    // Guardamos el email para usarlo después
-    watermarkElement = email;
-}
-
-function insertarMarcaEnPregunta(email) {
-    const existente = document.getElementById('security-watermark');
-    if (existente) existente.remove();
-
-    const wm = document.createElement('div');
-    wm.id = 'security-watermark';
-    wm.innerText = `© ${email}`;
-    wm.style.cssText = `
-        font-size: 0.70rem;
-        color: rgba(100, 100, 100, 0.5);
-        font-family: 'Courier New', monospace;
-        user-select: none;
-        pointer-events: none;
-        text-align: right;
-        margin-bottom: 6px;
-        letter-spacing: 0.03em;
-    `;
-
-    const quizScreen = document.getElementById('quiz-screen');
-    const questionText = document.getElementById('question-text');
-    quizScreen.insertBefore(wm, questionText);
-}
-
-function mostrarMarcaDeAgua() {
-    const wm = document.getElementById('security-watermark');
-    if (wm) wm.style.display = 'block';
-}
-
-function ocultarMarcaDeAgua() {
-    const wm = document.getElementById('security-watermark');
-    if (wm) wm.style.display = 'none';
-}
-
-// --- 2. LOG DE AUDITORÍA EN FIREBASE ---
-async function registrarAcceso(tipo, detalle = {}) {
-    if (!currentUserEmail) return;
-    try {
-        await addDoc(collection(db, "auditoria_accesos"), {
-            usuario: currentUserEmail,
-            nombre: currentUserName,
-            tipo,          // "inicio_sesion" | "ver_pregunta" | "perder_foco" | "pantalla_compartida"
-            timestamp: serverTimestamp(),
-            fecha_legible: new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }),
-            ...detalle
-        });
-    } catch (e) {
-        console.warn("Log de auditoría falló:", e);
-    }
-}
-
-// --- 3. OVERLAY BLOQUEADOR + DETECCIÓN DE PANTALLA COMPARTIDA ---
-let overlayOcultar = null;
-let screenShareStream = null;       // stream activo de captura de pantalla
-let screenShareBloqueado = false;   // true = bloqueado por screen share
-let esAdminActivo = false;          // se actualiza al autenticar
-
-function esAdmin() {
-    return currentUserEmail === ADMIN_EMAIL;
-}
-
-function crearOverlay() {
-    if (overlayOcultar) return;
-    overlayOcultar = document.createElement('div');
-    overlayOcultar.id = 'security-overlay';
-    // El contenido se actualiza dinámicamente según el motivo
-    overlayOcultar.style.cssText = `
-        display: none;
-        position: fixed;
-        top: 0; left: 0;
-        width: 100%; height: 100%;
-        background: #000;
-        z-index: 99999;
-        justify-content: center;
-        align-items: center;
-        flex-direction: column;
-        text-align: center;
-    `;
-    document.body.appendChild(overlayOcultar);
-}
-
-function mostrarOverlayBloqueador(motivo, esCompartirPantalla = false) {
-    if (!overlayOcultar) return;
-
-    const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
-    if (!quizVisible) return;
-
-    contentHidden = true;
-
-    const icono = esCompartirPantalla ? '🔴' : '🛡️';
-    const titulo = esCompartirPantalla
-        ? 'COMPARTIR PANTALLA BLOQUEADO'
-        : 'CONTENIDO PROTEGIDO';
-    const mensaje = esCompartirPantalla
-        ? 'Has intentado compartir esta pantalla.<br>Las preguntas están ocultas hasta que<br><strong>cierres la transmisión.</strong>'
-        : 'Vuelve a esta pestaña para continuar.';
-    const colorTitulo = esCompartirPantalla ? '#ff4444' : '#ffffff';
-
-    overlayOcultar.innerHTML = `
-        <div style="max-width: 480px; padding: 40px;">
-            <div style="font-size: 4rem; margin-bottom: 20px;">${icono}</div>
-            <p style="color: ${colorTitulo}; font-size: 1.8rem; font-weight: 900; letter-spacing: 0.05em; margin-bottom: 16px;">
-                ${titulo}
-            </p>
-            <p style="color: #aaa; font-size: 1rem; line-height: 1.7; margin-bottom: 28px;">
-                ${mensaje}
-            </p>
-            <div style="
-                background: rgba(255,255,255,0.07);
-                border: 1px solid rgba(255,255,255,0.15);
-                border-radius: 12px;
-                padding: 16px 24px;
-                display: inline-block;
-            ">
-                <p style="color: #fff; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; opacity: 0.6;">
-                    Sesión identificada como
-                </p>
-                <p style="color: #facc15; font-size: 1.1rem; font-weight: 700; margin: 0;">
-                    ${currentUserName}
-                </p>
-                <p style="color: #aaa; font-size: 0.85rem; margin: 4px 0 0 0;">
-                    ${currentUserEmail}
-                </p>
+        <!-- ================================================================
+             TAB: BANCO DE PREGUNTAS (CRUD)
+             ================================================================ -->
+        <div id="tab-preguntas">
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
+                <div>
+                    <h3 style="font-size:1.1rem; color:#202124; font-weight:700;">
+                        <i class="fas fa-database" style="color:#1a73e8;"></i> Gestión de Banco de Preguntas
+                    </h3>
+                    <p style="font-size:0.82rem; color:#888; margin-top:3px;">Consulta, edita, agrega o elimina preguntas directamente desde aquí.</p>
+                </div>
+                <button class="btn-nueva-pregunta" id="btn-abrir-nueva">
+                    <i class="fas fa-plus-circle"></i> Nueva Pregunta
+                </button>
             </div>
-            ${esCompartirPantalla ? '' : `
-            <p style="color: #555; font-size: 0.8rem; margin-top: 28px;">
-                Este evento ha sido registrado
-            </p>`}
+
+            <!-- FILTROS -->
+            <div class="crud-filtros">
+                <div class="filtro-group">
+                    <label><i class="fas fa-book"></i> Materia</label>
+                    <select id="filtro-materia-crud">
+                        <option value="">— Selecciona una materia —</option>
+                    </select>
+                </div>
+                <div class="filtro-group" style="max-width:180px;">
+                    <label><i class="fas fa-eye"></i> Preguntas por página</label>
+                    <input type="number" id="filtro-cantidad" value="20" min="1" placeholder="Ej: 20" style="width:100%; padding:9px 12px; border-radius:7px; border:1.5px solid #ddd; font-size:0.88rem; background:white; color:#333;">
+                </div>
+                <div class="filtro-group">
+                    <label><i class="fas fa-search"></i> Buscar texto</label>
+                    <input type="text" id="filtro-buscar" placeholder="Buscar en la pregunta...">
+                </div>
+                <div style="display:flex; gap:8px; align-items:flex-end; padding-bottom:1px;">
+                    <button id="btn-cargar-preguntas" class="btn-primary" style="padding:9px 18px; font-size:0.85rem; border-radius:7px;">
+                        <i class="fas fa-sync-alt"></i> Cargar
+                    </button>
+                </div>
+            </div>
+
+            <!-- STATS -->
+            <div class="stats-banner" id="crud-stats" style="display:none;"></div>
+
+            <!-- TABLA -->
+            <div id="tabla-preguntas-wrap">
+                <div class="empty-state">
+                    <i class="fas fa-book-open"></i>
+                    <p>Selecciona una materia y presiona <strong>Cargar</strong> para ver las preguntas.</p>
+                </div>
+            </div>
+
+            <!-- PAGINACIÓN -->
+            <div class="paginacion" id="crud-paginacion" style="display:none;"></div>
         </div>
-    `;
 
-    overlayOcultar.style.display = 'flex';
-    registrarAcceso(esCompartirPantalla ? 'intento_compartir_pantalla' : 'perder_foco', { motivo });
-}
+        <!-- ================================================================
+             TAB: CARGAR EXCEL
+             ================================================================ -->
+        <div id="tab-excel" class="hidden">
+            <h3>Carga Masiva de Preguntas (Con Actualización Automática)</h3>
+            <p style="font-size: 0.85em; color: #666; margin-bottom: 10px;">
+                Si la pregunta ya existe, se actualizarán sus opciones y la <strong>explicación</strong>.
+            </p>
+            <input type="file" id="upload-excel" accept=".xlsx" style="margin: 20px 0;">
+            <button id="btn-save-excel" class="btn-primary">Procesar y Sincronizar con Firebase</button>
+        </div>
 
-function ocultarOverlay() {
-    if (!overlayOcultar) return;
-    if (screenShareBloqueado) return; // No se puede cerrar si sigue compartiendo
-    contentHidden = false;
-    overlayOcultar.style.display = 'none';
-}
+        <!-- ================================================================
+             TAB: ALUMNOS
+             ================================================================ -->
+        <div id="tab-users" class="hidden">
+            <h3>Gestión de Alumnos (CRUD)</h3>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <input type="email" id="edit-email" placeholder="correo@unemi.edu.ec" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 10px;">
+                
+                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                    <select id="edit-limit" style="flex:1; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                        <option value="1">1 Dispositivo</option>
+                        <option value="2">2 Dispositivos</option>
+                    </select>
+                    <select id="edit-rol" style="flex:1; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                        <option value="usuario">👤 Usuario</option>
+                        <option value="admin">🔑 Administrador</option>
+                    </select>
+                </div>
 
-// ── DETECCIÓN DE SCREEN SHARE (Screen Capture API) ──────────────────────────
-// Interceptamos getDisplayMedia para saber si el usuario inicia una captura
-const _originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+                <!-- Materias: solo visible si rol = usuario -->
+                <div id="materias-asignacion" style="margin-bottom:10px;">
+                    <label style="font-size:0.82rem; font-weight:700; color:#5f6368; display:block; margin-bottom:6px; text-transform:uppercase;">Materias con acceso</label>
+                    <div id="materias-checkboxes" style="display:grid; grid-template-columns:1fr 1fr; gap:6px; background:white; border:1px solid #ddd; border-radius:6px; padding:10px;">
+                        <!-- Se llenan dinámicamente -->
+                    </div>
+                </div>
 
-navigator.mediaDevices.getDisplayMedia = async function(constraints) {
-    const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
-    if (!quizVisible) {
-        // Fuera del quiz, permitir normal
-        return _originalGetDisplayMedia(constraints);
-    }
+                <button id="btn-update-user" class="btn-primary" style="width:100%;">Guardar / Actualizar Alumno</button>
+            </div>
+            <table>
+                <thead><tr><th>Correo</th><th>Rol</th><th>Disp.</th><th>Acciones</th></tr></thead>
+                <tbody id="user-table-body"></tbody>
+            </table>
+        </div>
 
-    // Usuario normal intentando compartir durante el quiz → interceptar
-    try {
-        screenShareStream = await _originalGetDisplayMedia(constraints);
+        <!-- ================================================================
+             TAB: AUDITORÍA
+             ================================================================ -->
+        <div id="tab-auditoria" class="hidden">
+            <h3>📋 Reporte de Auditoría</h3>
+            <p style="font-size: 0.85em; color: #666; margin-bottom: 15px;">
+                Registro de accesos, preguntas vistas e intentos sospechosos de todos los alumnos.
+            </p>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
+                <div style="flex: 1; min-width: 160px;">
+                    <label style="font-size: 0.8rem; font-weight: bold; display: block; margin-bottom: 4px;">Usuario (email)</label>
+                    <input type="text" id="filtro-email" placeholder="Filtrar por email..." style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd; font-size: 0.85rem;">
+                </div>
+                <div style="flex: 1; min-width: 130px;">
+                    <label style="font-size: 0.8rem; font-weight: bold; display: block; margin-bottom: 4px;">Tipo de evento</label>
+                    <select id="filtro-tipo" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd; font-size: 0.85rem;">
+                        <option value="">Todos</option>
+                        <option value="inicio_sesion">Inicio sesión</option>
+                        <option value="ver_pregunta">Ver pregunta</option>
+                        <option value="perder_foco">Perder foco</option>
+                        <option value="intento_inspeccionar">Intento inspeccionar</option>
+                        <option value="intento_captura_pantalla">Intento captura</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button id="btn-filtrar" class="btn-primary" style="padding: 8px 16px; font-size: 0.85rem;">🔍 Filtrar</button>
+                    <button id="btn-exportar-excel" class="btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">📥 Exportar Excel</button>
+                    <button id="btn-limpiar-filtros" class="btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">✖ Limpiar</button>
+                </div>
+            </div>
+            <div id="auditoria-resumen" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;"></div>
+            <div style="overflow-x: auto;">
+                <table id="tabla-auditoria">
+                    <thead>
+                        <tr>
+                            <th>Fecha / Hora</th>
+                            <th>Usuario</th>
+                            <th>Tipo de Evento</th>
+                            <th>Detalle</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditoria-table-body">
+                        <tr><td colspan="4" style="text-align:center; color:#aaa; padding: 30px;">Cargando registros...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p id="auditoria-count" style="font-size: 0.8rem; color: #888; margin-top: 10px; text-align: right;"></p>
+        </div>
+    </div>
 
-        // Compartición activa → bloquear inmediatamente
-        screenShareBloqueado = true;
-        mostrarOverlayBloqueador('screen_share_detectado', true);
+        <!-- TAB: IMPRIMIR PDF -->
+        <div id="tab-imprimir" class="hidden">
+            <div style="margin-bottom:20px;">
+                <h3 style="font-size:1.1rem; color:#202124; font-weight:700; margin-bottom:4px;">
+                    <i class="fas fa-print" style="color:#1a73e8;"></i> Vista de Impresión / PDF
+                </h3>
+                <p style="font-size:0.82rem; color:#888;">Genera un listado completo de preguntas listo para imprimir o exportar como PDF.</p>
+            </div>
 
-        // Monitorear cuándo se detiene la transmisión
-        screenShareStream.getVideoTracks().forEach(track => {
-            track.addEventListener('ended', () => {
-                // El usuario cerró el Meet o dejó de compartir
-                screenShareBloqueado = false;
-                screenShareStream = null;
-                contentHidden = false;
-                overlayOcultar.style.display = 'none';
-                registrarAcceso('pantalla_compartida_detenida');
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Transmisión cerrada',
-                    text: 'Puedes continuar con el simulador.',
-                    timer: 3000,
-                    showConfirmButton: false,
-                    toast: true,
-                    position: 'top-end'
-                });
-            });
-        });
+            <div class="crud-filtros" style="margin-bottom:20px;">
+                <div class="filtro-group">
+                    <label><i class="fas fa-book"></i> Materia</label>
+                    <select id="imprimir-materia-select" style="width:100%; padding:9px 12px; border-radius:7px; border:1.5px solid #ddd; font-size:0.88rem; background:white;"></select>
+                </div>
+                <div class="filtro-group">
+                    <label><i class="fas fa-eye"></i> Mostrar respuestas</label>
+                    <select id="imprimir-mostrar-respuestas" style="width:100%; padding:9px 12px; border-radius:7px; border:1.5px solid #ddd; font-size:0.88rem; background:white;">
+                        <option value="si">✅ Sí, marcar respuesta correcta</option>
+                        <option value="no">❌ No (modo examen)</option>
+                    </select>
+                </div>
+                <div class="filtro-group">
+                    <label><i class="fas fa-sort-numeric-up"></i> Cantidad</label>
+                    <select id="imprimir-cantidad" style="width:100%; padding:9px 12px; border-radius:7px; border:1.5px solid #ddd; font-size:0.88rem; background:white;">
+                        <option value="todas">Todas las preguntas</option>
+                        <option value="20">20 preguntas</option>
+                        <option value="30">30 preguntas</option>
+                        <option value="50">50 preguntas</option>
+                    </select>
+                </div>
+                <div style="display:flex; gap:8px; align-items:flex-end;">
+                    <button id="btn-generar-pdf" class="btn-primary" style="padding:9px 18px; font-size:0.85rem; border-radius:7px; white-space:nowrap;">
+                        <i class="fas fa-eye"></i> Previsualizar
+                    </button>
+                </div>
+            </div>
 
-        return screenShareStream;
-    } catch (err) {
-        // Usuario canceló el diálogo de compartir → no bloquear
-        throw err;
-    }
-};
+            <div id="pdf-empty-state" class="empty-state">
+                <i class="fas fa-file-pdf"></i>
+                <p>Selecciona una materia y presiona <strong>Previsualizar</strong>.</p>
+            </div>
 
-// ── EVENTOS DE FOCO / PESTAÑA ────────────────────────────────────────────────
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-        mostrarOverlayBloqueador('cambio_pestaña', false);
-    } else {
-        ocultarOverlay();
-    }
-});
+            <div id="pdf-preview-area" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+                    <span id="pdf-info-label" style="font-size:0.85rem; color:#666;"></span>
+                    <button onclick="window.print()" style="background:linear-gradient(135deg,#ea4335,#c5221f);color:white;padding:10px 24px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:0.9rem;display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(234,67,53,0.35);">
+                        <i class="fas fa-file-pdf"></i> Guardar como PDF / Imprimir
+                    </button>
+                </div>
+                <div id="pdf-content" style="background:white;border:1px solid #e0e0e0;border-radius:10px;padding:40px;font-family:Georgia,serif;line-height:1.6;box-shadow:0 2px 12px rgba(0,0,0,0.06);"></div>
+            </div>
+        </div>
 
-window.addEventListener('blur', () => {
-    mostrarOverlayBloqueador('ventana_minimizada', false);
-});
-window.addEventListener('focus', () => {
-    ocultarOverlay();
-});
+    <!-- ================================================================
+         MODAL: AGREGAR / EDITAR PREGUNTA
+         ================================================================ -->
+    <div id="modal-pregunta-overlay">
+        <div id="modal-pregunta">
+            <div class="modal-header">
+                <h3 id="modal-titulo">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Nueva Pregunta</span>
+                </h3>
+                <button class="modal-close" id="btn-cerrar-modal" title="Cerrar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
 
-// --- 4. INTERCEPTAR CLIC DERECHO E INSPECCIONAR (disuasivo) ---
-document.addEventListener('contextmenu', (e) => {
-    const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
-    if (quizVisible) {
-        e.preventDefault();
-        Swal.fire({
-            icon: 'warning',
-            title: 'Acción Restringida',
-            text: 'El clic derecho está deshabilitado durante el simulador.',
-            timer: 2000,
-            showConfirmButton: false
-        });
-    }
-});
+            <input type="hidden" id="modal-doc-id">
 
-// Atajos de teclado de inspeccionar / captura de pantalla
-document.addEventListener('keydown', (e) => {
-    const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
-    if (!quizVisible) return;
-    // F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
-    if (e.key === 'F12' || 
-        (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key)) ||
-        (e.ctrlKey && e.key === 'u')) {
-        e.preventDefault();
-        registrarAcceso('intento_inspeccionar', { tecla: e.key });
-    }
-    // PrintScreen: registrar intento y limpiar portapapeles si es posible
-    if (e.key === 'PrintScreen') {
-        registrarAcceso('intento_captura_pantalla');
-        // Intentar limpiar portapapeles (solo funciona si el usuario ya dio permiso de escritura)
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText('').catch(() => {
-                // Sin permiso de clipboard: se registra el intento pero no se puede vaciar
+            <!-- MATERIA -->
+            <div class="form-group">
+                <label><i class="fas fa-book"></i> Materia</label>
+                <select id="modal-materia"></select>
+            </div>
+
+            <!-- TEXTO DE LA PREGUNTA -->
+            <div class="form-group">
+                <label><i class="fas fa-question-circle"></i> Texto de la Pregunta</label>
+                <textarea id="modal-texto" rows="3" placeholder="Escribe aquí la pregunta..."></textarea>
+            </div>
+
+            <!-- OPCIONES -->
+            <div class="form-group">
+                <label><i class="fas fa-list"></i> Opciones de Respuesta</label>
+                <div class="opciones-grid">
+                    <div>
+                        <div class="opcion-input-wrap" style="margin-bottom:10px;">
+                            <div class="opcion-letra">A</div>
+                            <input type="text" id="modal-op0" placeholder="Opción A">
+                        </div>
+                        <div class="opcion-input-wrap">
+                            <div class="opcion-letra" style="background:#34a853;">B</div>
+                            <input type="text" id="modal-op1" placeholder="Opción B">
+                        </div>
+                    </div>
+                    <div>
+                        <div class="opcion-input-wrap" style="margin-bottom:10px;">
+                            <div class="opcion-letra" style="background:#fbbc04;">C</div>
+                            <input type="text" id="modal-op2" placeholder="Opción C">
+                        </div>
+                        <div class="opcion-input-wrap">
+                            <div class="opcion-letra" style="background:#ea4335;">D</div>
+                            <input type="text" id="modal-op3" placeholder="Opción D">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RESPUESTA CORRECTA -->
+            <div class="form-group">
+                <label><i class="fas fa-check-circle"></i> Respuesta Correcta</label>
+                <div class="respuesta-selector" id="modal-respuesta-selector">
+                    <div class="respuesta-opcion" data-val="0" onclick="seleccionarRespuesta(0)">
+                        <div class="letra-resp">A</div> Opción A
+                    </div>
+                    <div class="respuesta-opcion" data-val="1" onclick="seleccionarRespuesta(1)">
+                        <div class="letra-resp">B</div> Opción B
+                    </div>
+                    <div class="respuesta-opcion" data-val="2" onclick="seleccionarRespuesta(2)">
+                        <div class="letra-resp">C</div> Opción C
+                    </div>
+                    <div class="respuesta-opcion" data-val="3" onclick="seleccionarRespuesta(3)">
+                        <div class="letra-resp">D</div> Opción D
+                    </div>
+                </div>
+            </div>
+
+            <!-- EXPLICACIÓN -->
+            <div class="form-group">
+                <label><i class="fas fa-lightbulb"></i> Explicación de la respuesta correcta</label>
+                <textarea id="modal-explicacion" rows="3" placeholder="Explica por qué esta es la respuesta correcta..."></textarea>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-cancelar" id="btn-cancelar-modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button class="btn-guardar" id="btn-guardar-pregunta">
+                    <i class="fas fa-save"></i> Guardar Pregunta
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, deleteDoc, addDoc, collection, getDocs, writeBatch, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
+
+        // ── CONFIG DE MATERIAS ──────────────────────────────────────────
+        let materias = [];
+        try {
+            const resp = await fetch('config-materias.json');
+            const cfg = await resp.json();
+            materias = cfg.materias.filter(m => m.activa);
+        } catch {
+            materias = [
+                { id: "comp-forense",   nombre: "Computación Forense" },
+                { id: "deontologia",    nombre: "Deontología" },
+                { id: "auditoria-ti",   nombre: "Auditoría de TI" },
+                { id: "emprendimiento", nombre: "Emprendimiento e Innovación" },
+                { id: "ia",             nombre: "Inteligencia Artificial" },
+                { id: "practicas-1",    nombre: "Prácticas Laborales 1" }
+            ];
+        }
+
+        // Populate selects de materias
+        function llenarSelectMaterias(selectId, incluirTodas = false) {
+            const sel = document.getElementById(selectId);
+            sel.innerHTML = '';
+            if (incluirTodas) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = '— Selecciona una materia —';
+                sel.appendChild(opt);
+            }
+            materias.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.nombre;
+                sel.appendChild(opt);
             });
         }
-    }
-});
+        llenarSelectMaterias('filtro-materia-crud', true);
+        llenarSelectMaterias('modal-materia', false);
 
-// ================================================================
-// Email del administrador autorizado (único con acceso al panel admin)
-const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
-
-// Usuarios con acceso permanente al simulador (2 dispositivos)
-const USUARIOS_PERMITIDOS = [
-    "kholguinb2@unemi.edu.ec",  // Administradora
-    "iastudillol@unemi.edu.ec",  // Usuario con acceso
-    "naguilarb@unemi.edu.ec"    // Usuario con acceso
-];
-
-let currentMateria = "", currentMode = "", questions = [], currentIndex = 0;
-let selectedAnswers = []; // Para guardar respuestas
-let timerInterval = null;
-let startTime = null;
-let tiempoLimiteSegundos = 0;   // 0 = sin límite
-let tiempoRestante = 0;         // para cuenta regresiva
-
-// 1. MANEJO DE SESIÓN PERMANENTE
-// Esta bandera evita que si onAuthStateChanged se dispara varias veces
-// (lo que Firebase hace normalmente al refrescar tokens), el flujo de
-// verificación de dispositivos se ejecute más de una vez por sesión.
-let sesionInicializada = false;
-
-onAuthStateChanged(auth, async (user) => {
-    const adminLinkContainer = document.getElementById('admin-link-container');
-
-    // Si no hay usuario y el redirect aún no resolvió, esperamos
-    // para evitar parpadeo en la pantalla de bienvenido
-    if (!user && !redirectResultResuelto) return;
-
-    if (user) {
-        // Si la sesión ya fue inicializada en esta carga de página, no repetir
-        // (Firebase puede disparar onAuthStateChanged varias veces al refrescar token)
-        if (sesionInicializada) return;
-        sesionInicializada = true;
-
-        const userEmail = user.email.toLowerCase();
-        const displayName = user.displayName || userEmail;
-        const esAdminUser = userEmail === ADMIN_EMAIL;
-
-        // Verificar acceso en Firebase
-        let userData = null;
-        if (!esAdminUser) {
-            try {
-                const userDoc = await getDoc(doc(db, "usuarios_seguros", userEmail));
-                if (!userDoc.exists()) {
-                    sesionInicializada = false; // Permitir retry si fue error transitorio
-                    await Swal.fire({
-                        icon: 'error',
-                        title: 'Acceso Denegado',
-                        text: 'No tienes autorización para usar este simulador. Contacta al administrador.',
-                        confirmButtonText: 'Entendido'
+        // ── AUTH ────────────────────────────────────────────────────────
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                if (user.email.toLowerCase() !== ADMIN_EMAIL) {
+                    Swal.fire({ icon: 'error', title: 'Acceso Denegado' }).then(() => {
+                        signOut(auth).then(() => window.location.href = 'index.html');
                     });
-                    signOut(auth);
                     return;
                 }
-                userData = userDoc.data();
-            } catch (error) {
-                sesionInicializada = false;
-                console.error('Error verificando usuario:', error);
-                // Si es error de red/permisos, no expulsar al usuario — mostrar retry
-                const resultado = await Swal.fire({
-                    icon: 'warning',
-                    title: 'Error de conexión',
-                    text: 'No se pudo verificar tu acceso. ¿Deseas intentar de nuevo?',
-                    confirmButtonText: 'Reintentar',
-                    cancelButtonText: 'Cerrar sesión',
-                    showCancelButton: true,
-                    confirmButtonColor: '#1a73e8'
-                });
-                if (resultado.isConfirmed) {
-                    location.reload(); // Recargar para reintentar todo el flujo
-                } else {
-                    signOut(auth);
-                }
+                document.getElementById('admin-name').innerText = user.displayName.toUpperCase();
+            } else {
+                window.location.href = 'index.html';
+            }
+        });
+
+        // ================================================================
+        //  MÓDULO CRUD DE PREGUNTAS
+        // ================================================================
+
+        let todasLasPreguntas = [];   // cache de la materia cargada
+        let materiaActual = '';
+        let respuestaSeleccionada = -1;
+
+        const letras = ['A', 'B', 'C', 'D'];
+        const colores = ['#1a73e8', '#34a853', '#fbbc04', '#ea4335'];
+
+        // Nombre legible de materia
+        function getNombreMateria(id) {
+            return materias.find(m => m.id === id)?.nombre || id;
+        }
+
+        // ── CARGAR PREGUNTAS ────────────────────────────────────────────
+        document.getElementById('btn-cargar-preguntas').onclick = cargarPreguntas;
+
+        async function cargarPreguntas() {
+            const materiaId = document.getElementById('filtro-materia-crud').value;
+            if (!materiaId) {
+                Swal.fire('Atención', 'Selecciona una materia primero.', 'warning');
                 return;
             }
+            materiaActual = materiaId;
+
+            const wrap = document.getElementById('tabla-preguntas-wrap');
+            wrap.innerHTML = `<div class="loading-preguntas"><div class="spinner"></div> Cargando preguntas de <strong>${getNombreMateria(materiaId)}</strong>...</div>`;
+            document.getElementById('crud-stats').style.display = 'none';
+            document.getElementById('crud-paginacion').style.display = 'none';
+
+            try {
+                const snap = await getDocs(collection(db, `bancos_preguntas/${materiaId}/preguntas`));
+                todasLasPreguntas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderTablaPreguntas();
+            } catch (e) {
+                console.error(e);
+                wrap.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle" style="color:#ea4335;"></i><p>Error al cargar: ${e.message}</p></div>`;
+            }
         }
 
-        // Validar límite de dispositivos (solo si es usuario normal y tenemos sus datos)
-        if (!esAdminUser && userData) {
-            const maxDispositivos = userData.max_dispositivos || 2;
-            const dispositivosActivos = userData.dispositivos || {};
-            const deviceId = getDeviceId();
+        // ── RENDER TABLA ────────────────────────────────────────────────
+        let paginaActual = 1;
+        const SECCION_SIZE = 10; // cuántas se muestran por sección cuando hay paginación
 
-            if (!dispositivosActivos[deviceId]) {
-                // Este dispositivo no está registrado aún
-                const cantidadActual = Object.keys(dispositivosActivos).length;
-                if (cantidadActual >= maxDispositivos) {
-                    sesionInicializada = false;
-                    await Swal.fire({
-                        icon: 'error',
-                        title: 'Límite de dispositivos alcanzado',
-                        html: `Tu cuenta permite acceder desde <strong>${maxDispositivos}</strong> dispositivo(s).<br>
-                               Ya tienes <strong>${cantidadActual}</strong> registrado(s).<br><br>
-                               Contacta al administrador para restablecer tus dispositivos.`,
-                        confirmButtonText: 'Entendido',
-                        confirmButtonColor: '#ea4335'
+        function renderTablaPreguntas() {
+            const busqueda = document.getElementById('filtro-buscar').value.trim().toLowerCase();
+            const cantidadVal = parseInt(document.getElementById('filtro-cantidad').value) || 20;
+
+            // Filtrar por búsqueda
+            let filtradas = todasLasPreguntas;
+            if (busqueda) {
+                filtradas = filtradas.filter(p =>
+                    (p.texto || '').toLowerCase().includes(busqueda) ||
+                    (p.opciones || []).some(o => o.toLowerCase().includes(busqueda)) ||
+                    (p.explicacion_correcta || '').toLowerCase().includes(busqueda)
+                );
+            }
+
+            // Las preguntas a considerar (las primeras N pedidas, o todas si checkbox)
+            const usarTodas = document.getElementById('filtro-cantidad').value === '' ||
+                              cantidadVal >= filtradas.length;
+            const pool = filtradas.slice(0, cantidadVal); // las N preguntas solicitadas
+
+            let preguntasAMostrar;
+            let totalPaginas = 1;
+            let desde = 0;
+
+            if (cantidadVal < 20) {
+                // Menos de 20: mostrar todas las N directamente, sin paginar
+                paginaActual = 1;
+                preguntasAMostrar = pool;
+                totalPaginas = 1;
+            } else {
+                // 20 o más: dividir las N preguntas en secciones de SECCION_SIZE
+                totalPaginas = Math.ceil(pool.length / SECCION_SIZE);
+                if (paginaActual > totalPaginas) paginaActual = 1;
+                desde = (paginaActual - 1) * SECCION_SIZE;
+                preguntasAMostrar = pool.slice(desde, desde + SECCION_SIZE);
+            }
+
+            // Stats
+            const statsEl = document.getElementById('crud-stats');
+            statsEl.style.display = 'flex';
+            statsEl.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-num">${todasLasPreguntas.length}</div>
+                    <div class="stat-label">Total en BD</div>
+                </div>
+                <div class="stat-card" style="border-left-color:#34a853;">
+                    <div class="stat-num" style="color:#34a853;">${pool.length}</div>
+                    <div class="stat-label">Solicitadas</div>
+                </div>
+                <div class="stat-card" style="border-left-color:#fbbc04;">
+                    <div class="stat-num" style="color:#856404; font-size:1rem;">${getNombreMateria(materiaActual)}</div>
+                    <div class="stat-label">Materia activa</div>
+                </div>
+            `;
+
+            const wrap = document.getElementById('tabla-preguntas-wrap');
+            const paginacionEl = document.getElementById('crud-paginacion');
+
+            if (preguntasAMostrar.length === 0) {
+                wrap.innerHTML = `<div class="empty-state"><i class="fas fa-search"></i><p>No se encontraron preguntas${busqueda ? ` con "<strong>${busqueda}</strong>"` : ''}.</p></div>`;
+                paginacionEl.style.display = 'none';
+                return;
+            }
+
+            // Construir tabla
+            let html = `
+                <table id="tabla-preguntas">
+                    <thead>
+                        <tr>
+                            <th style="width:44px;">#</th>
+                            <th>Pregunta y Opciones</th>
+                            <th>Explicación</th>
+                            <th style="width:110px;">Acciones</th>
+                        </tr>
+                    </thead><tbody>
+            `;
+
+            preguntasAMostrar.forEach((p, i) => {
+                const num = desde + i + 1;
+                const resp = parseInt(p.respuesta ?? -1);
+                const opciones = p.opciones || [];
+                const opcionesHtml = opciones.map((op, idx) => `
+                    <div class="opcion-mini ${idx === resp ? 'correcta' : ''}">
+                        ${idx === resp ? '<i class="fas fa-check" style="font-size:0.7rem;margin-right:3px;"></i>' : ''}
+                        <strong>${letras[idx]}.</strong> ${escapeHtml(op)}
+                    </div>
+                `).join('');
+
+                html += `
+                    <tr>
+                        <td><div class="num-badge">${num}</div></td>
+                        <td class="td-pregunta">
+                            <div class="pregunta-texto">${escapeHtml(p.texto || '')}</div>
+                            <div class="opciones-mini">${opcionesHtml}</div>
+                        </td>
+                        <td class="td-explicacion">
+                            <div class="explicacion-preview">${escapeHtml(p.explicacion_correcta || '—')}</div>
+                        </td>
+                        <td>
+                            <div class="acciones-celda">
+                                <button class="btn-accion btn-editar" onclick="window.editarPregunta('${p.id}')">
+                                    <i class="fas fa-pen"></i>
+                                </button>
+                                <button class="btn-accion btn-eliminar" onclick="window.eliminarPregunta('${p.id}', '${escapeHtml(p.texto || '').substring(0,40)}...')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `</tbody></table>`;
+            wrap.innerHTML = html;
+
+            // Paginación
+            paginacionEl.style.display = 'flex';
+            if (totalPaginas > 1) {
+                let btns = `<button onclick="irPagina(${paginaActual - 1})" ${paginaActual === 1 ? 'disabled' : ''}><i class="fas fa-chevron-left"></i></button>`;
+                for (let p = 1; p <= totalPaginas; p++) {
+                    if (p === 1 || p === totalPaginas || (p >= paginaActual - 2 && p <= paginaActual + 2)) {
+                        btns += `<button onclick="irPagina(${p})" class="${p === paginaActual ? 'activa' : ''}">${p}</button>`;
+                    } else if (p === paginaActual - 3 || p === paginaActual + 3) {
+                        btns += `<span style="padding:0 4px;color:#aaa;">…</span>`;
+                    }
+                }
+                btns += `<button onclick="irPagina(${paginaActual + 1})" ${paginaActual === totalPaginas ? 'disabled' : ''}><i class="fas fa-chevron-right"></i></button>`;
+                btns += `<span class="info-pagina">Sección ${paginaActual} de ${totalPaginas} · ${pool.length} preguntas solicitadas</span>`;
+                paginacionEl.innerHTML = btns;
+            } else {
+                paginacionEl.innerHTML = `<span class="info-pagina">Mostrando ${preguntasAMostrar.length} preguntas</span>`;
+            }
+        }
+
+        window.irPagina = (p) => {
+            paginaActual = p;
+            renderTablaPreguntas();
+            window.scrollTo({ top: 300, behavior: 'smooth' });
+        };
+
+        // Buscar en tiempo real
+        document.getElementById('filtro-buscar').addEventListener('input', () => {
+            if (todasLasPreguntas.length > 0) { paginaActual = 1; renderTablaPreguntas(); }
+        });
+        document.getElementById('filtro-cantidad').addEventListener('change', () => {
+            if (todasLasPreguntas.length > 0) { paginaActual = 1; renderTablaPreguntas(); }
+        });
+
+        // ── MODAL ───────────────────────────────────────────────────────
+        function abrirModal(modoEdicion = false) {
+            document.getElementById('modal-pregunta-overlay').classList.add('visible');
+            const icono = modoEdicion ? 'fa-pen' : 'fa-plus-circle';
+            const titulo = modoEdicion ? 'Editar Pregunta' : 'Nueva Pregunta';
+            document.querySelector('#modal-titulo i').className = `fas ${icono}`;
+            document.querySelector('#modal-titulo span').textContent = titulo;
+        }
+
+        function cerrarModal() {
+            document.getElementById('modal-pregunta-overlay').classList.remove('visible');
+            limpiarModal();
+        }
+
+        function limpiarModal() {
+            document.getElementById('modal-doc-id').value = '';
+            document.getElementById('modal-texto').value = '';
+            document.getElementById('modal-op0').value = '';
+            document.getElementById('modal-op1').value = '';
+            document.getElementById('modal-op2').value = '';
+            document.getElementById('modal-op3').value = '';
+            document.getElementById('modal-explicacion').value = '';
+            respuestaSeleccionada = -1;
+            document.querySelectorAll('.respuesta-opcion').forEach(el => el.classList.remove('seleccionada'));
+            // Preseleccionar materia actual si hay una
+            if (materiaActual) document.getElementById('modal-materia').value = materiaActual;
+        }
+
+        window.seleccionarRespuesta = (idx) => {
+            respuestaSeleccionada = idx;
+            document.querySelectorAll('.respuesta-opcion').forEach((el, i) => {
+                el.classList.toggle('seleccionada', i === idx);
+            });
+        };
+
+        document.getElementById('btn-abrir-nueva').onclick = () => {
+            limpiarModal();
+            abrirModal(false);
+        };
+        document.getElementById('btn-cerrar-modal').onclick = cerrarModal;
+        document.getElementById('btn-cancelar-modal').onclick = cerrarModal;
+        document.getElementById('modal-pregunta-overlay').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) cerrarModal();
+        });
+
+        // ── EDITAR PREGUNTA ─────────────────────────────────────────────
+        window.editarPregunta = (docId) => {
+            const p = todasLasPreguntas.find(x => x.id === docId);
+            if (!p) return;
+
+            document.getElementById('modal-doc-id').value = docId;
+            document.getElementById('modal-materia').value = materiaActual;
+            document.getElementById('modal-texto').value = p.texto || '';
+            const opciones = p.opciones || [];
+            ['modal-op0','modal-op1','modal-op2','modal-op3'].forEach((id, i) => {
+                document.getElementById(id).value = opciones[i] || '';
+            });
+            document.getElementById('modal-explicacion').value = p.explicacion_correcta || '';
+
+            const resp = parseInt(p.respuesta ?? -1);
+            if (resp >= 0) {
+                window.seleccionarRespuesta(resp);
+            }
+
+            abrirModal(true);
+        };
+
+        // ── ELIMINAR PREGUNTA ───────────────────────────────────────────
+        window.eliminarPregunta = (docId, preview) => {
+            Swal.fire({
+                title: '¿Eliminar esta pregunta?',
+                html: `<p style="font-size:0.85rem;color:#666;">"${preview}"</p>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-trash"></i> Sí, eliminar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#ea4335',
+            }).then(async (r) => {
+                if (!r.isConfirmed) return;
+                try {
+                    await deleteDoc(doc(db, `bancos_preguntas/${materiaActual}/preguntas`, docId));
+                    todasLasPreguntas = todasLasPreguntas.filter(p => p.id !== docId);
+                    renderTablaPreguntas();
+                    Swal.fire({ icon: 'success', title: 'Eliminada', text: 'La pregunta fue eliminada.', timer: 1800, showConfirmButton: false });
+                } catch (e) {
+                    Swal.fire('Error', e.message, 'error');
+                }
+            });
+        };
+
+        // ── GUARDAR (CREAR o ACTUALIZAR) ────────────────────────────────
+        document.getElementById('btn-guardar-pregunta').onclick = async () => {
+            const materiaId = document.getElementById('modal-materia').value;
+            const texto = document.getElementById('modal-texto').value.trim();
+            const op0 = document.getElementById('modal-op0').value.trim();
+            const op1 = document.getElementById('modal-op1').value.trim();
+            const op2 = document.getElementById('modal-op2').value.trim();
+            const op3 = document.getElementById('modal-op3').value.trim();
+            const explicacion = document.getElementById('modal-explicacion').value.trim();
+            const docId = document.getElementById('modal-doc-id').value;
+
+            // Validar
+            if (!texto) return Swal.fire('Campo requerido', 'Escribe el texto de la pregunta.', 'warning');
+            if (!op0 || !op1 || !op2 || !op3) return Swal.fire('Campo requerido', 'Completa las 4 opciones de respuesta.', 'warning');
+            if (respuestaSeleccionada < 0) return Swal.fire('Campo requerido', 'Selecciona cuál es la respuesta correcta.', 'warning');
+
+            const datos = {
+                texto,
+                opciones: [op0, op1, op2, op3],
+                respuesta: respuestaSeleccionada,
+                explicacion_correcta: explicacion || 'Consulte el material de estudio oficial.'
+            };
+
+            const btn = document.getElementById('btn-guardar-pregunta');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+            try {
+                if (docId) {
+                    // Actualizar existente
+                    await setDoc(doc(db, `bancos_preguntas/${materiaId}/preguntas`, docId), datos);
+                    const idx = todasLasPreguntas.findIndex(p => p.id === docId);
+                    if (idx >= 0) todasLasPreguntas[idx] = { id: docId, ...datos };
+                    Swal.fire({ icon: 'success', title: '¡Actualizada!', text: 'La pregunta fue actualizada correctamente.', timer: 2000, showConfirmButton: false });
+                } else {
+                    // Crear nueva
+                    const newId = `p_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+                    await setDoc(doc(db, `bancos_preguntas/${materiaId}/preguntas`, newId), datos);
+                    todasLasPreguntas.unshift({ id: newId, ...datos });
+                    // Si la materia del modal es diferente a la activa, recargar
+                    if (materiaId !== materiaActual) {
+                        materiaActual = materiaId;
+                        document.getElementById('filtro-materia-crud').value = materiaId;
+                    }
+                    Swal.fire({ icon: 'success', title: '¡Creada!', text: 'La nueva pregunta fue añadida al banco.', timer: 2000, showConfirmButton: false });
+                }
+                cerrarModal();
+                renderTablaPreguntas();
+            } catch (e) {
+                Swal.fire('Error', e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Guardar Pregunta';
+            }
+        };
+
+        // ── UTILIDADES ──────────────────────────────────────────────────
+        function escapeHtml(str) {
+            return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        // ================================================================
+        //  MÓDULO CARGAR EXCEL
+        // ================================================================
+        let dataExcel = [];
+
+        function validarEstructuraExcel(data) {
+            if (!data || data.length === 0) return { valido: false, mensaje: 'El archivo está vacío.' };
+            const requeridos = ['materia_id', 'texto', 'opcion_0', 'opcion_1', 'opcion_2', 'opcion_3', 'respuesta'];
+            for (let i = 0; i < data.length; i++) {
+                for (const campo of requeridos) {
+                    if (!(campo in data[i]) || data[i][campo] === undefined || data[i][campo] === '') {
+                        return { valido: false, mensaje: `Fila ${i + 2}: Falta el campo "${campo}".` };
+                    }
+                }
+            }
+            return { valido: true };
+        }
+
+        document.getElementById('upload-excel').onchange = (e) => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+                    const tempData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                    const val = validarEstructuraExcel(tempData);
+                    if (!val.valido) {
+                        Swal.fire('Error de Plantilla', val.mensaje, 'error');
+                        e.target.value = '';
+                    } else {
+                        dataExcel = tempData;
+                        Swal.fire('Éxito', `Archivo cargado: ${tempData.length} preguntas listas.`, 'success');
+                    }
+                } catch (err) {
+                    Swal.fire('Error', 'No se pudo leer el archivo.', 'error');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        document.getElementById('btn-save-excel').onclick = async () => {
+            if (dataExcel.length === 0) return Swal.fire('Error', 'Carga un archivo Excel primero.', 'warning');
+            Swal.fire({ title: 'Sincronizando...', text: 'Actualizando base de datos en Firebase', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+            try {
+                const batch = writeBatch(db);
+                let nuevas = 0; let actualizadas = 0;
+                for (const p of dataExcel) {
+                    const colRef = collection(db, `bancos_preguntas/${p.materia_id}/preguntas`);
+                    const q = query(colRef, where("texto", "==", p.texto.trim()));
+                    const snap = await getDocs(q);
+                    let ref;
+                    if (!snap.empty) { ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, snap.docs[0].id); actualizadas++; }
+                    else { ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`); nuevas++; }
+                    batch.set(ref, { texto: p.texto.trim(), opciones: [p.opcion_0.toString().trim(), p.opcion_1.toString().trim(), p.opcion_2.toString().trim(), p.opcion_3.toString().trim()], respuesta: parseInt(p.respuesta), explicacion_correcta: p.explicacion ? p.explicacion.toString().trim() : "Consulte el material de estudio oficial." });
+                }
+                await batch.commit();
+                Swal.fire('Proceso Terminado', `Preguntas Nuevas: ${nuevas}<br>Preguntas Actualizadas: ${actualizadas}`, 'success');
+                dataExcel = [];
+                document.getElementById('upload-excel').value = '';
+            } catch (error) {
+                console.error(error);
+                Swal.fire('Error Crítico', 'No se pudo completar la sincronización.', 'error');
+            }
+        };
+
+        // ================================================================
+        //  MÓDULO USUARIOS
+        // ================================================================
+
+        // Llenar checkboxes de materias en el formulario
+        function llenarCheckboxesMaterias(materiasSeleccionadas = []) {
+            const cont = document.getElementById('materias-checkboxes');
+            cont.innerHTML = materias.map(m => `
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem; cursor:pointer; padding:4px;">
+                    <input type="checkbox" value="${m.id}" 
+                           ${materiasSeleccionadas.includes(m.id) ? 'checked' : ''}
+                           style="width:14px; height:14px; accent-color:#1a73e8;">
+                    ${m.nombre}
+                </label>
+            `).join('');
+        }
+
+        // Mostrar/ocultar materias según rol
+        document.getElementById('edit-rol').addEventListener('change', (e) => {
+            document.getElementById('materias-asignacion').style.display =
+                e.target.value === 'admin' ? 'none' : 'block';
+        });
+
+        async function loadUsers() {
+            const body = document.getElementById('user-table-body');
+            body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:20px;">Cargando...</td></tr>';
+            llenarCheckboxesMaterias();
+            const snap = await getDocs(collection(db, "usuarios_seguros"));
+            body.innerHTML = '';
+            snap.forEach(d => {
+                const data = d.data();
+                const rol = data.rol || 'usuario';
+                const rolBadge = rol === 'admin'
+                    ? `<span style="background:#e8f0fe;color:#1a73e8;padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:700;">🔑 Admin</span>`
+                    : `<span style="background:#f0f4f0;color:#5f6368;padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:700;">👤 Usuario</span>`;
+                const dispositivosActivos = Object.keys(data.dispositivos || {}).length;
+                const maxDisp = data.max_dispositivos || 1;
+                const dispColor = dispositivosActivos >= maxDisp ? '#ea4335' : '#34a853';
+                const dispBadge = `<span style="background:${dispColor}20;color:${dispColor};padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:700;">${dispositivosActivos}/${maxDisp}</span>`;
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-size:0.82rem;">${d.id}</td>
+                    <td>${rolBadge}</td>
+                    <td>${dispBadge}</td>
+                    <td>
+                        <button onclick="window.prepareEdit('${d.id}')" class="btn-edit" title="Editar"><i class="fas fa-edit"></i></button>
+                        <button onclick="window.resetDispositivos('${d.id}')" 
+                            style="background:#e8f0fe;color:#1a73e8;border:1px solid #c5d8fb;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.82rem;font-weight:600;transition:all 0.2s;"
+                            title="Resetear dispositivos registrados"
+                            onmouseover="this.style.background='#1a73e8';this.style.color='white';"
+                            onmouseout="this.style.background='#e8f0fe';this.style.color='#1a73e8';">
+                            <i class="fas fa-rotate-right"></i> Reset
+                        </button>
+                        <button onclick="window.confirmDelete('${d.id}')" class="btn-delete" title="Eliminar"><i class="fas fa-trash"></i></button>
+                    </td>`;
+                body.appendChild(tr);
+            });
+            if (snap.empty) body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:20px;">No hay alumnos registrados.</td></tr>';
+        }
+
+        window.prepareEdit = async (email) => {
+            document.getElementById('edit-email').value = email;
+            try {
+                const snap = await getDocs(collection(db, "usuarios_seguros"));
+                const docData = snap.docs.find(d => d.id === email)?.data() || {};
+                document.getElementById('edit-limit').value = docData.max_dispositivos || 1;
+                const rol = docData.rol || 'usuario';
+                document.getElementById('edit-rol').value = rol;
+                document.getElementById('materias-asignacion').style.display = rol === 'admin' ? 'none' : 'block';
+                llenarCheckboxesMaterias(docData.materias || []);
+            } catch(e) {
+                llenarCheckboxesMaterias([]);
+            }
+            document.getElementById('edit-email').scrollIntoView({ behavior: 'smooth' });
+        };
+
+        window.confirmDelete = (email) => {
+            Swal.fire({ title: '¿Eliminar usuario?', icon: 'warning', showCancelButton: true,
+                confirmButtonText: 'Sí, eliminar', confirmButtonColor: '#ea4335' })
+            .then(async (r) => {
+                if (r.isConfirmed) { await deleteDoc(doc(db, "usuarios_seguros", email)); loadUsers(); }
+            });
+        };
+
+        window.resetDispositivos = (email) => {
+            Swal.fire({
+                title: '¿Resetear dispositivos?',
+                html: `<p style="color:#444;">Se eliminarán <strong>todos los dispositivos registrados</strong> de:<br>
+                       <code style="background:#f0f2f5;padding:4px 10px;border-radius:6px;font-size:0.9rem;">${email}</code></p>
+                       <p style="color:#888;font-size:0.85rem;margin-top:10px;">El alumno podrá volver a registrar hasta el límite permitido desde cero.</p>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-rotate-right"></i> Sí, resetear',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#1a73e8',
+                cancelButtonColor: '#5f6368'
+            }).then(async (r) => {
+                if (!r.isConfirmed) return;
+                try {
+                    await updateDoc(doc(db, "usuarios_seguros", email), { dispositivos: {} });
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Dispositivos reseteados!',
+                        html: `<p>Los dispositivos de <strong>${email}</strong> han sido borrados.</p>
+                               <p style="color:#888;font-size:0.85rem;">El alumno puede volver a ingresar desde sus dispositivos normalmente.</p>`,
+                        timer: 3000,
+                        showConfirmButton: false
                     });
-                    signOut(auth);
+                    loadUsers();
+                } catch(e) {
+                    Swal.fire('Error', 'No se pudo resetear: ' + e.message, 'error');
+                }
+            });
+        };
+
+        document.getElementById('btn-update-user').onclick = async () => {
+            const email = document.getElementById('edit-email').value.trim().toLowerCase();
+            if (!email) return Swal.fire('Atención', 'Escribe el correo del alumno.', 'warning');
+            const rol = document.getElementById('edit-rol').value;
+            const maxDisp = parseInt(document.getElementById('edit-limit').value);
+
+            // Recoger materias seleccionadas (solo si es usuario)
+            let materiasAsignadas = [];
+            if (rol === 'usuario') {
+                materiasAsignadas = Array.from(
+                    document.querySelectorAll('#materias-checkboxes input[type=checkbox]:checked')
+                ).map(cb => cb.value);
+                if (materiasAsignadas.length === 0) {
+                    return Swal.fire('Atención', 'Selecciona al menos una materia para este usuario.', 'warning');
+                }
+            }
+
+            const datos = { max_dispositivos: maxDisp, rol };
+            if (rol === 'usuario') datos.materias = materiasAsignadas;
+
+            await setDoc(doc(db, "usuarios_seguros", email), datos, { merge: true });
+            Swal.fire({ icon: 'success', title: '¡Guardado!',
+                text: `${email} actualizado como ${rol === 'admin' ? 'Administrador' : 'Usuario'}.`,
+                timer: 2000, showConfirmButton: false });
+            loadUsers();
+        };
+
+        // ================================================================
+        //  MÓDULO AUDITORÍA
+        // ================================================================
+        let todosLosRegistros = [];
+        const TIPO_LABELS = {
+            'inicio_sesion':            { label: '🔐 Inicio de Sesión',    color: '#1a73e8' },
+            'ver_pregunta':             { label: '👁️ Ver Pregunta',         color: '#34a853' },
+            'perder_foco':              { label: '⚠️ Perdió Foco',          color: '#fbbc04' },
+            'intento_inspeccionar':     { label: '🚨 Intento Inspeccionar', color: '#ea4335' },
+            'intento_captura_pantalla': { label: '📸 Intento Captura',      color: '#ea4335' },
+        };
+
+        async function cargarAuditoria() {
+            const body = document.getElementById('auditoria-table-body');
+            body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#aaa;padding:30px;">Cargando registros...</td></tr>`;
+            try {
+                const snap = await getDocs(query(collection(db, "auditoria_accesos"), orderBy("timestamp", "desc"), limit(500)));
+                todosLosRegistros = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderTablaAuditoria(todosLosRegistros);
+            } catch (e) {
+                console.error(e);
+                body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ea4335;padding:20px;">Error al cargar. Verifica los índices de Firestore.</td></tr>`;
+            }
+        }
+
+        function renderTablaAuditoria(registros) {
+            const body = document.getElementById('auditoria-table-body');
+            const countEl = document.getElementById('auditoria-count');
+            const resumenEl = document.getElementById('auditoria-resumen');
+            body.innerHTML = '';
+            if (registros.length === 0) {
+                body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#aaa;padding:30px;">No se encontraron registros.</td></tr>`;
+                countEl.innerText = ''; resumenEl.innerHTML = ''; return;
+            }
+            const conteos = {};
+            registros.forEach(r => { conteos[r.tipo] = (conteos[r.tipo] || 0) + 1; });
+            resumenEl.innerHTML = Object.entries(conteos).map(([tipo, count]) => {
+                const info = TIPO_LABELS[tipo] || { label: tipo, color: '#888' };
+                return `<div style="background:#fff;border:1px solid #eee;border-left:4px solid ${info.color};padding:8px 14px;border-radius:6px;font-size:0.82rem;"><strong style="color:${info.color}">${info.label}</strong><br><span style="font-size:1.1rem;font-weight:bold;">${count}</span> registros</div>`;
+            }).join('');
+            registros.forEach(r => {
+                const info = TIPO_LABELS[r.tipo] || { label: r.tipo, color: '#888' };
+                const fecha = r.fecha_legible || (r.timestamp?.toDate ? r.timestamp.toDate().toLocaleString('es-EC') : '—');
+                let detalle = '—';
+                if (r.tipo === 'ver_pregunta') detalle = `<strong>${r.materia || ''}</strong> | Modo: ${r.modo || ''} | #${r.pregunta_num || ''}: "${(r.pregunta_texto || '').substring(0, 50)}..."`;
+                else if (r.tipo === 'perder_foco') detalle = `Motivo: ${r.motivo || '—'}`;
+                else if (r.tipo === 'intento_inspeccionar') detalle = `Tecla: ${r.tecla || '—'}`;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td style="font-size:0.8rem;white-space:nowrap;">${fecha}</td><td style="font-size:0.8rem;">${r.usuario || '—'}</td><td><span style="background:${info.color}20;color:${info.color};padding:3px 8px;border-radius:20px;font-size:0.78rem;font-weight:600;white-space:nowrap;">${info.label}</span></td><td style="font-size:0.8rem;">${detalle}</td>`;
+                body.appendChild(tr);
+            });
+            countEl.innerText = `Mostrando ${registros.length} registros`;
+        }
+
+        function filtrarAuditoria() {
+            const emailFiltro = document.getElementById('filtro-email').value.trim().toLowerCase();
+            const tipoFiltro = document.getElementById('filtro-tipo').value;
+            let resultado = todosLosRegistros;
+            if (emailFiltro) resultado = resultado.filter(r => (r.usuario || '').toLowerCase().includes(emailFiltro));
+            if (tipoFiltro) resultado = resultado.filter(r => r.tipo === tipoFiltro);
+            renderTablaAuditoria(resultado);
+        }
+
+        function exportarAExcel() {
+            const emailFiltro = document.getElementById('filtro-email').value.trim().toLowerCase();
+            const tipoFiltro = document.getElementById('filtro-tipo').value;
+            let datos = todosLosRegistros;
+            if (emailFiltro) datos = datos.filter(r => (r.usuario || '').toLowerCase().includes(emailFiltro));
+            if (tipoFiltro) datos = datos.filter(r => r.tipo === tipoFiltro);
+            if (datos.length === 0) return Swal.fire('Sin datos', 'No hay registros para exportar.', 'warning');
+            const filas = datos.map(r => ({ 'Fecha / Hora': r.fecha_legible || '—', 'Usuario': r.usuario || '—', 'Nombre': r.nombre || '—', 'Tipo de Evento': TIPO_LABELS[r.tipo]?.label || r.tipo, 'Materia': r.materia || '—', 'Modo': r.modo || '—', 'Pregunta #': r.pregunta_num || '—', 'Texto Pregunta': r.pregunta_texto || '—', 'Motivo/Detalle': r.motivo || r.tecla || '—' }));
+            const ws = XLSX.utils.json_to_sheet(filas);
+            ws['!cols'] = [{ wch: 22 }, { wch: 30 }, { wch: 25 }, { wch: 25 }, { wch: 20 }, { wch: 12 }, { wch: 10 }, { wch: 50 }, { wch: 20 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Auditoría');
+            XLSX.writeFile(wb, `Auditoria_UNEMI_${new Date().toLocaleDateString('es-EC').replace(/\//g, '-')}.xlsx`);
+        }
+
+        document.getElementById('btn-filtrar').onclick = filtrarAuditoria;
+        document.getElementById('btn-exportar-excel').onclick = exportarAExcel;
+        document.getElementById('btn-limpiar-filtros').onclick = () => {
+            document.getElementById('filtro-email').value = '';
+            document.getElementById('filtro-tipo').value = '';
+            renderTablaAuditoria(todosLosRegistros);
+        };
+
+        // ================================================================
+        //  NAVEGACIÓN DE TABS
+        // ================================================================
+        window.changeTab = (id) => {
+            ['tab-preguntas', 'tab-excel', 'tab-users', 'tab-auditoria', 'tab-imprimir'].forEach(t => {
+                document.getElementById(t).classList.toggle('hidden', t !== id);
+            });
+            // Actualizar botones activos
+            ['btn-tab-preguntas', 'btn-tab-excel', 'btn-tab-users', 'btn-tab-auditoria', 'btn-tab-imprimir'].forEach(b => {
+                document.getElementById(b).classList.remove('active');
+            });
+            document.getElementById(`btn-tab-${id.replace('tab-', '')}`).classList.add('active');
+
+            if (id === 'tab-users') loadUsers();
+            if (id === 'tab-auditoria') cargarAuditoria();
+        };
+
+
+        // ================================================================
+        //  MÓDULO IMPRIMIR PDF
+        // ================================================================
+        function llenarSelectImpresion() {
+            const sel = document.getElementById('imprimir-materia-select');
+            if (!sel) return;
+            sel.innerHTML = '<option value="">— Selecciona una materia —</option>';
+            materias.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.nombre;
+                sel.appendChild(opt);
+            });
+        }
+        llenarSelectImpresion();
+
+        document.getElementById('btn-generar-pdf').onclick = async () => {
+            const materiaId = document.getElementById('imprimir-materia-select').value;
+            if (!materiaId) {
+                Swal.fire('Atención', 'Selecciona una materia primero.', 'warning');
+                return;
+            }
+            const mostrarResp = document.getElementById('imprimir-mostrar-respuestas').value === 'si';
+            const cantidadVal = document.getElementById('imprimir-cantidad').value;
+            const nombreMateria = materias.find(m => m.id === materiaId)?.nombre || materiaId;
+
+            const btn = document.getElementById('btn-generar-pdf');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
+
+            try {
+                const snap = await getDocs(collection(db, `bancos_preguntas/${materiaId}/preguntas`));
+                let preguntas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                if (preguntas.length === 0) {
+                    Swal.fire('Sin preguntas', 'No hay preguntas para esta materia.', 'info');
                     return;
                 }
-                // Registrar este nuevo dispositivo
-                const nuevosDisp = { ...dispositivosActivos };
-                nuevosDisp[deviceId] = {
-                    registrado: new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }),
-                    userAgent: navigator.userAgent.substring(0, 100)
-                };
-                try {
-                    await updateDoc(doc(db, "usuarios_seguros", userEmail), {
-                        dispositivos: nuevosDisp
+
+                if (cantidadVal !== 'todas') {
+                    preguntas = preguntas.slice(0, parseInt(cantidadVal));
+                }
+
+                const letrasOpc = ['A', 'B', 'C', 'D'];
+                const fecha = new Date().toLocaleDateString('es-EC', { year:'numeric', month:'long', day:'numeric' });
+
+                let html = `
+                    <div style="text-align:center;margin-bottom:30px;border-bottom:3px solid #1a73e8;padding-bottom:20px;">
+                        <div style="font-size:0.78rem;color:#888;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Universidad Estatal de Milagro · UNEMI</div>
+                        <h1 style="font-size:1.5rem;color:#1a73e8;margin:0 0 6px 0;font-family:'Segoe UI',sans-serif;">${nombreMateria}</h1>
+                        <div style="font-size:0.85rem;color:#666;">Banco de Preguntas · ${preguntas.length} pregunta${preguntas.length!==1?'s':''} · ${fecha}</div>
+                        ${!mostrarResp ? '<div style="margin-top:10px;background:#fff3cd;color:#856404;padding:6px 14px;border-radius:20px;font-size:0.78rem;display:inline-block;font-weight:600;">⚠ MODO EXAMEN · Sin respuestas marcadas</div>' : ''}
+                    </div>
+                `;
+
+                preguntas.forEach((p, idx) => {
+                    const texto = p.texto || p.pregunta || p.explicacion || 'Sin texto';
+                    const opciones = p.opciones || [];
+                    const correcta = p.respuesta;
+
+                    html += `<div class="pdf-pregunta" style="margin-bottom:20px;padding:14px 16px;border-left:3px solid #1a73e8;background:#fafafa;border-radius:0 8px 8px 0;page-break-inside:avoid;">
+                        <p style="font-weight:700;font-size:0.93rem;margin:0 0 10px 0;color:#202124;">
+                            <span style="background:#1a73e8;color:white;padding:2px 8px;border-radius:4px;font-size:0.78rem;margin-right:8px;font-family:monospace;">${idx+1}</span>
+                            ${escapeHtml(texto)}
+                        </p>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-left:6px;">`;
+
+                    opciones.forEach((op, oi) => {
+                        const esCorrecta = mostrarResp && oi === correcta;
+                        html += `<div style="padding:6px 10px;border-radius:6px;font-size:0.85rem;border:1.5px solid ${esCorrecta?'#34a853':'#e0e0e0'};background:${esCorrecta?'#e6f4ea':'white'};color:${esCorrecta?'#1e7e34':'#444'};font-weight:${esCorrecta?'700':'400'};display:flex;align-items:center;gap:7px;">
+                            <span style="background:${esCorrecta?'#34a853':'#e8f0fe'};color:${esCorrecta?'white':'#1a73e8'};width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:800;flex-shrink:0;">${letrasOpc[oi]}</span>
+                            ${escapeHtml(op)}
+                            ${esCorrecta?'<span style="margin-left:auto;font-size:1rem;">✓</span>':''}
+                        </div>`;
                     });
-                    console.log('✅ Nuevo dispositivo registrado:', deviceId);
-                } catch(e) {
-                    // No bloquear el acceso si falla el registro del dispositivo
-                    console.warn('No se pudo registrar dispositivo (acceso permitido de todas formas):', e);
-                }
-            } else {
-                console.log('✅ Dispositivo ya registrado:', deviceId);
-            }
-        }
 
-        // Inicializar sesión
-        currentUserEmail = userEmail;
-        currentUserName = displayName;
-        crearMarcaDeAgua(userEmail);
-        crearOverlay();
-        registrarAcceso('inicio_sesion');
+                    html += `</div>`;
 
-        const maxDisp = userData?.max_dispositivos || 2;
-        document.getElementById('auth-screen').classList.add('hidden');
-        document.getElementById('setup-screen').classList.remove('hidden');
-        document.getElementById('user-display').classList.remove('hidden');
-        document.getElementById('user-info').innerText = `${displayName.toUpperCase()} (${maxDisp} Disp.)`;
-
-        if (esAdminUser) {
-            adminLinkContainer.classList.remove('hidden');
-            adminLinkContainer.style.display = 'block';
-        } else {
-            adminLinkContainer.classList.add('hidden');
-            adminLinkContainer.style.display = 'none';
-        }
-
-        cargarMaterias();
-
-    } else {
-        sesionInicializada = false;
-        restaurarPantallaLogin();
-        document.getElementById('auth-screen').classList.remove('hidden');
-        document.getElementById('setup-screen').classList.add('hidden');
-        document.getElementById('user-display').classList.add('hidden');
-        if (adminLinkContainer) {
-            adminLinkContainer.classList.add('hidden');
-            adminLinkContainer.style.display = 'none';
-        }
-    }
-});
-
-// 2. CARGAR MATERIAS Y ACTIVAR BOTÓN
-async function cargarMaterias() {
-    try {
-        // Intentar múltiples rutas posibles
-        const posiblesRutas = [
-            'config-materias.json',
-            './config-materias.json',
-            '/config-materias.json',
-            'data/config-materias.json',
-            './data/config-materias.json'
-        ];
-
-        let data = null;
-        let rutaExitosa = null;
-
-        for (const ruta of posiblesRutas) {
-            try {
-                const res = await fetch(ruta);
-                if (res.ok) {
-                    data = await res.json();
-                    rutaExitosa = ruta;
-                    console.log(`✅ Materias cargadas desde: ${ruta}`);
-                    break;
-                }
-            } catch (e) {
-                continue;
-            }
-        }
-
-        if (!data) {
-            throw new Error('No se encontró el archivo config-materias.json en ninguna ruta');
-        }
-
-        // ── FILTRAR MATERIAS SEGÚN ROL ──────────────────────────────
-        let materiasVisibles = data.materias.filter(m => m.activa);
-
-        // Solo si NO es admin, filtrar por materias asignadas en Firebase
-        const esAdmin = currentUserEmail === ADMIN_EMAIL;
-        if (!esAdmin) {
-            try {
-                const userDoc = await getDoc(doc(db, "usuarios_seguros", currentUserEmail));
-                if (userDoc.exists()) {
-                    const userData = userDoc.data();
-                    const rol = userData.rol || 'usuario';
-                    if (rol !== 'admin' && userData.materias && userData.materias.length > 0) {
-                        materiasVisibles = materiasVisibles.filter(m => userData.materias.includes(m.id));
+                    if (mostrarResp && p.explicacion_correcta) {
+                        html += `<div style="margin-top:8px;padding:7px 10px;background:#e8f0fe;border-radius:6px;font-size:0.78rem;color:#1a73e8;"><strong>💡</strong> ${escapeHtml(p.explicacion_correcta)}</div>`;
                     }
-                }
+                    html += `</div>`;
+                });
+
+                document.getElementById('pdf-content').innerHTML = html;
+                document.getElementById('pdf-preview-area').style.display = 'block';
+                document.getElementById('pdf-empty-state').style.display = 'none';
+                document.getElementById('pdf-info-label').innerText = `📄 ${preguntas.length} preguntas · "${nombreMateria}" · ${mostrarResp?'Con respuestas':'Sin respuestas (examen)'}`;
+                document.getElementById('pdf-preview-area').scrollIntoView({ behavior:'smooth' });
+
             } catch(e) {
-                console.error('Error obteniendo rol del usuario:', e);
-            }
-        }
-        // ────────────────────────────────────────────────────────────
-
-        const select = document.getElementById('subject-select');
-        const btnStart = document.getElementById('btn-start');
-
-        select.innerHTML = '<option value="">-- Selecciona Materia --</option>';
-        materiasVisibles.forEach(m => {
-            const opt = document.createElement('option');
-            opt.value = m.id;
-            opt.textContent = m.nombre;
-            select.appendChild(opt);
-        });
-
-        if (materiasVisibles.length === 0) {
-            select.innerHTML = '<option value="">Sin materias asignadas</option>';
-            btnStart.disabled = true;
-            btnStart.textContent = "Sin acceso a materias";
-            return;
-        }
-
-        select.onchange = () => {
-            if (select.value === "") {
-                btnStart.disabled = true;
-                btnStart.textContent = "Selecciona una materia";
-                btnStart.style.opacity = "0.5";
-            } else {
-                btnStart.disabled = false;
-                btnStart.textContent = "Iniciar";
-                btnStart.style.opacity = "1";
+                console.error(e);
+                Swal.fire('Error', 'No se pudieron cargar las preguntas: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-eye"></i> Previsualizar';
             }
         };
 
-        // Mostrar/ocultar opciones según modo seleccionado
-        const modeSelect = document.getElementById('mode-select');
-        const tiempoContainer = document.getElementById('tiempo-container');
-        const cantidadContainer = document.getElementById('cantidad-container');
-        const opcionSinLimite = document.getElementById('opcion-sin-limite');
-        const tiempoSelect = document.getElementById('tiempo-select');
-
-        modeSelect.onchange = () => {
-            if (modeSelect.value === 'study') {
-                opcionSinLimite.style.display = '';
-                cantidadContainer.style.display = 'block';
-            } else {
-                opcionSinLimite.style.display = 'none';
-                cantidadContainer.style.display = 'none';
-                if (tiempoSelect.value === '0') tiempoSelect.value = '20';
-            }
-        };
-    } catch (error) {
-        console.error('Error cargando materias:', error);
-        Swal.fire({ 
-            icon: 'error', 
-            title: 'Error', 
-            html: `
-                <p>No se pudo cargar la lista de materias.</p>
-                <p style="font-size: 0.85rem; color: #666; margin-top: 10px;">
-                    Verifica que el archivo <code>config-materias.json</code> esté en la raíz del proyecto.
-                </p>
-                <p style="font-size: 0.8rem; color: #999; margin-top: 5px;">
-                    Error técnico: ${error.message}
-                </p>
-            `,
-            confirmButtonColor: '#1a73e8'
-        });
-    }
-}
-
-// 3. INICIAR EXAMEN O RECUPERAR PROGRESO
-document.getElementById('btn-start').onclick = async () => {
-    currentMateria = document.getElementById('subject-select').value;
-    currentMode = document.getElementById('mode-select').value;
-    // Leer tiempo: en examen siempre será 15/20/30/60; en estudio puede ser 0 (sin límite)
-    const tiempoMinutos = parseInt(document.getElementById('tiempo-select').value) || 0;
-    tiempoLimiteSegundos = tiempoMinutos * 60;
-
-    try {
-        const snap = await getDocs(collection(db, `bancos_preguntas/${currentMateria}/preguntas`));
-        
-        if (snap.empty) {
-            Swal.fire({ 
-                icon: 'info', 
-                title: 'Aviso', 
-                text: 'Atención: No existen preguntas cargadas para esta materia.', 
-                confirmButtonColor: '#1a73e8' 
-            });
-            return;
-        }
-
-        questions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        
-        // Mezclar preguntas aleatoriamente
-        questions = questions.sort(() => Math.random() - 0.5);
-
-        if (currentMode === "exam") {
-            // MODO EXAMEN: siempre 20 preguntas aleatorias
-            questions = questions.slice(0, 20);
-            selectedAnswers = new Array(questions.length).fill(null);
-        } else {
-            // MODO ESTUDIO: 20 preguntas O todas, según lo que eligió el usuario
-            const cantidadSelect = document.getElementById('cantidad-select');
-            const cantidadElegida = cantidadSelect ? cantidadSelect.value : '20';
-            if (cantidadElegida !== 'todas') {
-                questions = questions.slice(0, 20);
-            }
-            // Si eligió "todas", se quedan todas las preguntas ya mezcladas
-            selectedAnswers = new Array(questions.length).fill(null);
-        }
-
-        // MODO ESTUDIO: RECUPERAR AVANCE
-        if (currentMode === "study") {
-            const saved = localStorage.getItem(`progreso_${currentMateria}`);
-            if (saved) {
-                const result = await Swal.fire({
-                    title: 'Avance Detectado',
-                    text: '¿Deseas retomar lo avanzado o empezar desde la primera pregunta?',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'Retomar avance',
-                    cancelButtonText: 'Empezar de cero'
-                });
-                currentIndex = result.isConfirmed ? parseInt(saved) : 0;
-            } else { 
-                currentIndex = 0; 
-            }
-            startTimer(); // Iniciar timer también en modo estudio (puede ser con límite o sin límite)
-        } else { 
-            currentIndex = 0; 
-            startTimer();
-        }
-
-        document.getElementById('setup-screen').classList.add('hidden');
-        document.getElementById('quiz-screen').classList.remove('hidden');
-        document.getElementById('btn-header-return').classList.add('hidden'); // OCULTAR botón del header
-        
-        // MOSTRAR LA PRIMERA PREGUNTA
-        renderQuestion();
-        
-    } catch (error) {
-        console.error('Error cargando preguntas:', error);
-        Swal.fire({ 
-            icon: 'error', 
-            title: 'Error', 
-            text: 'Hubo un problema al cargar las preguntas. Por favor, intenta de nuevo.' 
-        });
-    }
-};
-
-// 4. RENDERIZAR PREGUNTA
-function renderQuestion() {
-    if (currentIndex >= questions.length) {
-        finalizarExamen();
-        return;
-    }
-
-    const question = questions[currentIndex];
-    const questionText = document.getElementById('question-text');
-    const optionsContainer = document.getElementById('options-container');
-    
-    // Registrar en auditoría que se vio esta pregunta
-    registrarAcceso('ver_pregunta', {
-        materia: currentMateria,
-        modo: currentMode,
-        pregunta_num: currentIndex + 1,
-        pregunta_id: question.id,
-        pregunta_texto: (question.texto || '').substring(0, 80)
-    });
-
-    // Insertar marca de agua encima de la pregunta
-    insertarMarcaEnPregunta(currentUserEmail);
-
-    // Manejar diferentes estructuras de datos (texto, explicacion, o pregunta)
-    const preguntaTexto = question.texto || question.explicacion || question.pregunta || 'Pregunta sin texto';
-    questionText.textContent = `${currentIndex + 1}. ${preguntaTexto}`;
-    optionsContainer.innerHTML = '';
-
-    // AGREGAR BOTÓN "VOLVER AL MENÚ" VISIBLE
-    const menuButton = document.createElement('button');
-    menuButton.className = 'btn-back-menu';
-    menuButton.innerHTML = '<i class="fas fa-home"></i> Volver al Menú';
-    menuButton.onclick = () => {
-        Swal.fire({ 
-            title: '¿Volver al menú?', 
-            text: currentMode === "study" ? 'Tu progreso se guardará automáticamente.' : 'Perderás el progreso de este examen.',
-            icon: 'warning', 
-            showCancelButton: true,
-            confirmButtonColor: '#1a73e8',
-            confirmButtonText: 'Sí, volver'
-        }).then((res) => { 
-            if(res.isConfirmed) {
-                stopTimer();
-                location.reload(); 
-            }
-        });
-    };
-    optionsContainer.appendChild(menuButton);
-
-    // Verificar que existan opciones
-    if (!question.opciones || !Array.isArray(question.opciones)) {
-        optionsContainer.innerHTML += '<p style="color: red;">Error: Esta pregunta no tiene opciones válidas.</p>';
-        return;
-    }
-
-    // Verificar si esta pregunta ya fue respondida
-    const yaRespondida = selectedAnswers[currentIndex] !== null;
-
-    // Crear botones para cada opción
-    question.opciones.forEach((opcion, index) => {
-        const button = document.createElement('button');
-        button.className = 'option-button';
-        button.innerHTML = `<span class="option-letter">${String.fromCharCode(65 + index)}</span> ${opcion}`;
-        
-        // En modo estudio, si ya fue respondida, mostrar los colores
-        if (currentMode === "study" && yaRespondida) {
-            button.disabled = true;
-            if (index === question.respuesta) {
-                button.classList.add('correct');
-            } else if (index === selectedAnswers[currentIndex]) {
-                button.classList.add('incorrect');
-            }
-        } else if (selectedAnswers[currentIndex] === index) {
-            // Marcar si ya fue seleccionada (modo examen)
-            button.classList.add('selected');
-        }
-        
-        button.onclick = () => selectAnswer(index);
-        optionsContainer.appendChild(button);
-    });
-
-    // Mostrar feedback si ya fue respondida en modo estudio
-    if (currentMode === "study" && yaRespondida) {
-        const feedbackBox = document.createElement('div');
-        feedbackBox.id = 'feedback-box';
-        const correct = question.respuesta;
-        const userAnswer = selectedAnswers[currentIndex];
-        
-        feedbackBox.style.cssText = `
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: left;
-            background: ${userAnswer === correct ? '#e6f4ea' : '#fce8e6'};
-            border-left: 4px solid ${userAnswer === correct ? '#34a853' : '#ea4335'};
-        `;
-        
-        if (userAnswer === correct) {
-            feedbackBox.innerHTML = `
-                <p style="font-weight: bold; color: #34a853; margin-bottom: 8px;">
-                    <i class="fas fa-check-circle"></i> ¡Correcto!
-                </p>
-                <p style="color: #555; font-size: 0.95rem;">
-                    ${question.explicacion_correcta || 'Has seleccionado la respuesta correcta. ¡Excelente trabajo!'}
-                </p>
-            `;
-        } else {
-            feedbackBox.innerHTML = `
-                <p style="font-weight: bold; color: #ea4335; margin-bottom: 8px;">
-                    <i class="fas fa-times-circle"></i> Incorrecto
-                </p>
-                <p style="color: #555; font-size: 0.95rem; margin-bottom: 8px;">
-                    La respuesta correcta es: <strong>${String.fromCharCode(65 + correct)}) ${question.opciones[correct]}</strong>
-                </p>
-                <p style="color: #666; font-size: 0.9rem;">
-                    ${question.explicacion_correcta || 'Revisa el material de estudio para comprender mejor este tema.'}
-                </p>
-            `;
-        }
-        
-        optionsContainer.appendChild(feedbackBox);
-    }
-
-    // Botones de navegación
-    const navDiv = document.createElement('div');
-    navDiv.style.cssText = 'display: flex; justify-content: space-between; margin-top: 25px; gap: 10px;';
-    
-    if (currentIndex > 0) {
-        const btnPrev = document.createElement('button');
-        btnPrev.className = 'btn-secondary';
-        btnPrev.innerHTML = '<i class="fas fa-arrow-left"></i> Anterior';
-        btnPrev.onclick = () => {
-            currentIndex--;
-            renderQuestion();
-            guardarAvanceAutomatico();
-        };
-        navDiv.appendChild(btnPrev);
-    }
-
-    const btnNext = document.createElement('button');
-    btnNext.className = 'btn-primary';
-    btnNext.style.cssText = 'margin-left: auto;'; // Solo alineación
-    
-    if (currentIndex === questions.length - 1) {
-        btnNext.textContent = 'Finalizar';
-        btnNext.onclick = finalizarExamen;
-    } else {
-        btnNext.innerHTML = 'Siguiente <i class="fas fa-arrow-right"></i>';
-        btnNext.onclick = () => {
-            if (selectedAnswers[currentIndex] === null && currentMode === "exam") {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Pregunta sin responder',
-                    text: '¿Deseas continuar sin responder?',
-                    showCancelButton: true,
-                    confirmButtonText: 'Sí, continuar'
-                }).then(result => {
-                    if (result.isConfirmed) {
-                        currentIndex++;
-                        renderQuestion();
-                        guardarAvanceAutomatico();
-                    }
-                });
-            } else {
-                currentIndex++;
-                renderQuestion();
-                guardarAvanceAutomatico();
-            }
-        };
-    }
-    
-    navDiv.appendChild(btnNext);
-    optionsContainer.appendChild(navDiv);
-}
-
-// 5. SELECCIONAR RESPUESTA
-function selectAnswer(optionIndex) {
-    const buttons = document.querySelectorAll('.option-button');
-    
-    // Modo Estudio: mostrar retroalimentación visual sin alertas
-    if (currentMode === "study") {
-        const question = questions[currentIndex];
-        const correct = question.respuesta;
-        
-        buttons.forEach((btn, idx) => {
-            btn.disabled = true;
-            if (idx === correct) {
-                btn.classList.add('correct');
-            } else if (idx === optionIndex) {
-                btn.classList.add('incorrect');
-            }
-        });
-        
-        selectedAnswers[currentIndex] = optionIndex;
-        
-        // Mostrar explicación debajo de las opciones
-        const optionsContainer = document.getElementById('options-container');
-        const existingFeedback = document.getElementById('feedback-box');
-        if (existingFeedback) existingFeedback.remove();
-        
-        const feedbackBox = document.createElement('div');
-        feedbackBox.id = 'feedback-box';
-        feedbackBox.style.cssText = `
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: left;
-            background: ${optionIndex === correct ? '#e6f4ea' : '#fce8e6'};
-            border-left: 4px solid ${optionIndex === correct ? '#34a853' : '#ea4335'};
-        `;
-        
-        if (optionIndex === correct) {
-            feedbackBox.innerHTML = `
-                <p style="font-weight: bold; color: #34a853; margin-bottom: 8px;">
-                    <i class="fas fa-check-circle"></i> ¡Correcto!
-                </p>
-                <p style="color: #555; font-size: 0.95rem;">
-                    ${question.explicacion_correcta || 'Has seleccionado la respuesta correcta. ¡Excelente trabajo!'}
-                </p>
-            `;
-        } else {
-            feedbackBox.innerHTML = `
-                <p style="font-weight: bold; color: #ea4335; margin-bottom: 8px;">
-                    <i class="fas fa-times-circle"></i> Incorrecto
-                </p>
-                <p style="color: #555; font-size: 0.95rem; margin-bottom: 8px;">
-                    La respuesta correcta es: <strong>${String.fromCharCode(65 + correct)}) ${question.opciones[correct]}</strong>
-                </p>
-                <p style="color: #666; font-size: 0.9rem;">
-                    ${question.explicacion_correcta || 'Revisa el material de estudio para comprender mejor este tema.'}
-                </p>
-            `;
-        }
-        
-        // Insertar antes de los botones de navegación
-        const navButtons = optionsContainer.querySelector('div[style*="justify-content: space-between"]');
-        if (navButtons) {
-            optionsContainer.insertBefore(feedbackBox, navButtons);
-        } else {
-            optionsContainer.appendChild(feedbackBox);
-        }
-        
-    } else {
-        // Modo Examen: solo marcar selección
-        buttons.forEach(btn => btn.classList.remove('selected'));
-        buttons[optionIndex].classList.add('selected');
-        selectedAnswers[currentIndex] = optionIndex;
-    }
-}
-
-// 6. FINALIZAR EXAMEN
-function finalizarExamen() {
-    stopTimer();
-    
-    if (currentMode === "exam") {
-        let correctas = 0;
-        questions.forEach((q, idx) => {
-            if (selectedAnswers[idx] === q.respuesta) correctas++;
-        });
-        
-        const porcentaje = ((correctas / questions.length) * 100).toFixed(1);
-        
-        // Calcular tiempo usado según modo
-        let tiempoTexto;
-        if (tiempoLimiteSegundos > 0) {
-            const usados = tiempoLimiteSegundos - tiempoRestante;
-            const min = Math.floor(usados / 60);
-            const seg = usados % 60;
-            tiempoTexto = `${String(min).padStart(2,'0')}:${String(seg).padStart(2,'0')} de ${tiempoLimiteSegundos/60} min`;
-        } else {
-            tiempoTexto = document.getElementById('timer-display').textContent;
-        }
-        
-        Swal.fire({
-            icon: 'info',
-            title: 'Examen Finalizado',
-            html: `
-                <p style="font-size: 1.1rem; margin: 15px 0;">
-                    <strong>Respuestas correctas:</strong> ${correctas} / ${questions.length}<br>
-                    <strong>Calificación:</strong> ${porcentaje}%<br>
-                    <strong>Tiempo:</strong> ${tiempoTexto}
-                </p>
-            `,
-            confirmButtonColor: '#1a73e8',
-            confirmButtonText: 'Ver Resultados Detallados'
-        }).then(() => {
-            mostrarResultadosDetallados(correctas);
-        });
-    } else {
-        Swal.fire({
-            icon: 'success',
-            title: '¡Sesión Completada!',
-            text: 'Has terminado todas las preguntas de estudio.',
-            confirmButtonColor: '#1a73e8'
-        }).then(() => {
-            localStorage.removeItem(`progreso_${currentMateria}`);
-            location.reload();
-        });
-    }
-}
-
-// 7. MOSTRAR RESULTADOS DETALLADOS
-function mostrarResultadosDetallados(correctas) {
-    const container = document.getElementById('quiz-screen');
-    container.innerHTML = `
-        <h2 style="color: #1a73e8; margin-bottom: 20px;">Resultados Detallados</h2>
-        <div style="text-align: center; margin-bottom: 30px;">
-            <div style="font-size: 3rem; color: ${correctas >= questions.length * 0.7 ? '#34a853' : '#ea4335'};">
-                ${((correctas / questions.length) * 100).toFixed(1)}%
-            </div>
-            <p style="color: #666;">Correctas: ${correctas} / ${questions.length}</p>
-        </div>
-        <div id="detailed-results"></div>
-        <button onclick="location.reload()" class="btn-primary" style="margin-top: 20px;">Volver al Menú</button>
-    `;
-    
-    const resultsDiv = document.getElementById('detailed-results');
-    questions.forEach((q, idx) => {
-        const userAnswer = selectedAnswers[idx];
-        const isCorrect = userAnswer === q.respuesta;
-        
-        const resultCard = document.createElement('div');
-        resultCard.style.cssText = `
-            background: ${isCorrect ? '#e6f4ea' : '#fce8e6'};
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            text-align: left;
-            border-left: 4px solid ${isCorrect ? '#34a853' : '#ea4335'};
-        `;
-        
-        resultCard.innerHTML = `
-            <p style="font-weight: bold; margin-bottom: 8px;">${idx + 1}. ${q.texto || q.explicacion || q.pregunta || 'Pregunta sin texto'}</p>
-            <p style="color: #666; font-size: 0.9rem;">
-                Tu respuesta: <strong>${userAnswer !== null ? String.fromCharCode(65 + userAnswer) : 'Sin responder'}</strong><br>
-                Respuesta correcta: <strong>${String.fromCharCode(65 + q.respuesta)}</strong>
-            </p>
-        `;
-        resultsDiv.appendChild(resultCard);
-    });
-}
-
-// 8. CRONÓMETRO / CUENTA REGRESIVA
-function startTimer() {
-    const display = document.getElementById('timer-display');
-    const label   = document.getElementById('timer-label');
-
-    if (tiempoLimiteSegundos > 0) {
-        // ── CUENTA REGRESIVA ──────────────────────────────────────────
-        tiempoRestante = tiempoLimiteSegundos;
-        label.style.display = 'block';
-        label.textContent = 'Tiempo restante';
-        display.style.color = '#1a73e8';
-
-        function actualizarDisplay() {
-            const min = Math.floor(tiempoRestante / 60);
-            const seg = tiempoRestante % 60;
-            display.textContent = `${String(min).padStart(2,'0')}:${String(seg).padStart(2,'0')}`;
-
-            // Alertas visuales según tiempo restante
-            if (tiempoRestante <= 60) {
-                display.style.color = '#ea4335';    // rojo último minuto
-                display.style.animation = 'none';
-                if (tiempoRestante % 2 === 0) {     // parpadeo cada 2 seg
-                    display.style.opacity = '0.4';
-                } else {
-                    display.style.opacity = '1';
+        document.getElementById('btn-admin-logout').onclick = () => {
+            Swal.fire({
+                title: 'Cerrar Sesión',
+                html: `
+                    <div style="text-align:center; padding: 10px 0;">
+                        <i class="fas fa-sign-out-alt" style="font-size:2.5rem; color:#ea4335; margin-bottom:12px; display:block;"></i>
+                        <p style="color:#444; font-size:0.95rem; margin:0;">
+                            ¿Estás seguro de que deseas cerrar tu sesión del <strong>Panel Administrativo</strong>?
+                        </p>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-sign-out-alt"></i> Sí, cerrar sesión',
+                cancelButtonText: '<i class="fas fa-times"></i> Cancelar',
+                confirmButtonColor: '#ea4335',
+                cancelButtonColor: '#5f6368',
+                reverseButtons: true,
+                focusCancel: true,
+                customClass: {
+                    popup: 'swal-logout-popup'
                 }
-            } else if (tiempoRestante <= 300) {
-                display.style.color = '#f29900';    // naranja últimos 5 min
-            } else {
-                display.style.color = '#1a73e8';
-            }
-        }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Cerrando sesión...',
+                        text: 'Hasta pronto.',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false,
+                        timerProgressBar: true
+                    }).then(() => {
+                        signOut(auth).then(() => location.href = 'index.html');
+                    });
+                }
+            });
+        };
 
-        actualizarDisplay();
-
-        timerInterval = setInterval(() => {
-            tiempoRestante--;
-            actualizarDisplay();
-
-            // Avisos en momentos clave
-            if (tiempoRestante === 300) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '⏳ 5 minutos restantes',
-                    text: 'Ve terminando tus respuestas.',
-                    timer: 3000,
-                    showConfirmButton: false,
-                    toast: true,
-                    position: 'top-end'
-                });
-            } else if (tiempoRestante === 60) {
-                Swal.fire({
-                    icon: 'error',
-                    title: '🚨 ¡1 minuto!',
-                    text: 'El tiempo está por agotarse.',
-                    timer: 3000,
-                    showConfirmButton: false,
-                    toast: true,
-                    position: 'top-end'
-                });
-            } else if (tiempoRestante <= 0) {
-                clearInterval(timerInterval);
-                display.textContent = '00:00';
-                display.style.opacity = '1';
-                // Tiempo agotado → finalizar automáticamente
-                Swal.fire({
-                    icon: 'error',
-                    title: '⏰ ¡Tiempo agotado!',
-                    text: 'El tiempo límite ha terminado. Se enviarán tus respuestas automáticamente.',
-                    confirmButtonColor: '#ea4335',
-                    confirmButtonText: 'Ver resultados',
-                    allowOutsideClick: false,
-                    allowEscapeKey: false
-                }).then(() => {
-                    finalizarExamen();
-                });
-            }
-        }, 1000);
-
-    } else {
-        // ── SIN LÍMITE: ocultar timer completamente ───────────────────
-        label.style.display = 'none';
-        display.style.display = 'none';
-    }
-}
-
-function stopTimer() {
-    if (timerInterval) clearInterval(timerInterval);
-}
-
-// 9. GUARDADO AUTOMÁTICO
-function guardarAvanceAutomatico() {
-    if (currentMode === "study") {
-        localStorage.setItem(`progreso_${currentMateria}`, currentIndex);
-    }
-}
-
-// 10. CERRAR SESIÓN
-document.getElementById('btn-logout').onclick = () => {
-    Swal.fire({
-        title: 'Cerrar Sesión',
-        text: currentMode === "study" ? "Tu progreso ha sido guardado automáticamente y podrás continuar más tarde." : "¿Estás seguro de que deseas cerrar sesión?",
-        icon: 'question',
-        showCancelButton: true,
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#1a73e8',
-        confirmButtonText: 'Aceptar'
-    }).then((result) => { 
-        if (result.isConfirmed) {
-            stopTimer();
-            signOut(auth).then(() => location.reload()); 
-        }
-    });
-};
-
-document.getElementById('btn-header-return').onclick = () => {
-    Swal.fire({ 
-        title: '¿Volver al menú?', 
-        text: 'Se guardará tu progreso si estás en modo estudio.', 
-        icon: 'warning', 
-        showCancelButton: true,
-        confirmButtonColor: '#1a73e8'
-    }).then((res) => { 
-        if(res.isConfirmed) {
-            stopTimer();
-            location.reload(); 
-        }
-    });
-};
-
-// Nota: el evento de btn-login se asigna dinámicamente en restaurarPantallaLogin()
+    </script>
+</body>
+</html>
