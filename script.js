@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -244,29 +244,7 @@ let tiempoRestante = 0;
 // AUTENTICACIÓN — MÓVIL: redirect / ESCRITORIO: popup
 // ================================================================
 
-// Capturar resultado del redirect (solo aplica después de volver de Google en móvil)
-getRedirectResult(auth)
-    .then((result) => {
-        if (result && result.user) {
-            console.log('✅ Login por redirect exitoso:', result.user.email);
-        }
-    })
-    .catch((error) => {
-        // Errores normales cuando no hay redirect pendiente — ignorar
-        const erroresNormales = ['auth/no-auth-event', 'auth/null-user', 'auth/operation-not-supported-in-this-environment'];
-        if (!erroresNormales.includes(error.code)) {
-            console.error('Error en getRedirectResult:', error.code, error.message);
-            // Solo alertar si es un error real de login fallido
-            if (error.code === 'auth/account-exists-with-different-credential' ||
-                error.code === 'auth/user-disabled') {
-                Swal.fire({
-                    icon: 'error', title: 'Error de acceso',
-                    text: 'Hubo un problema con tu cuenta de Google. Contacta al administrador.',
-                    confirmButtonColor: '#1a73e8'
-                });
-            }
-        }
-    });
+// Autenticación: signInWithPopup funciona en móvil y escritorio cuando se llama desde un click directo del usuario
 
 // 1. MANEJO DE SESIÓN
 onAuthStateChanged(auth, async (user) => {
@@ -817,7 +795,11 @@ document.getElementById('btn-header-return').onclick = () => {
 };
 
 // ================================================================
-// BOTÓN LOGIN — FIX PRINCIPAL: redirect en móvil, popup en escritorio
+// BOTÓN LOGIN — signInWithPopup funciona en móvil Y escritorio
+// cuando se llama directamente desde un evento click del usuario.
+// signInWithRedirect NO funciona en GitHub Pages con Firebase porque
+// los navegadores móviles bloquean las cookies de terceros del iframe
+// de firebaseapp.com, haciendo que getRedirectResult devuelva null.
 // ================================================================
 document.getElementById('btn-login').onclick = async () => {
     const btnLogin = document.getElementById('btn-login');
@@ -825,27 +807,37 @@ document.getElementById('btn-login').onclick = async () => {
     btnLogin.textContent = 'Conectando...';
 
     try {
-        if (esMobil) {
-            // Móvil: redirige a Google y vuelve → getRedirectResult() lo captura al cargar
-            await signInWithRedirect(auth, provider);
-            // Después del redirect, la página se recarga automáticamente
-        } else {
-            // Escritorio: ventana emergente
-            await signInWithPopup(auth, provider);
-        }
+        // signInWithPopup funciona en móvil si se llama desde un click directo
+        // (el navegador no bloquea popups abiertos por acción del usuario)
+        await signInWithPopup(auth, provider);
+        // onAuthStateChanged se encarga del resto automáticamente
     } catch (error) {
         btnLogin.disabled = false;
         btnLogin.textContent = 'Acceder con Google';
 
-        // Ignorar cancelaciones del usuario
+        // Ignorar cancelaciones del usuario (cerró la ventana de Google)
         const cancelaciones = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'];
         if (!cancelaciones.includes(error.code)) {
             console.error('Error en login:', error.code, error.message);
-            Swal.fire({
-                icon: 'error', title: 'Error al iniciar sesión',
-                text: 'No se pudo conectar con Google. Verifica tu conexión e intenta de nuevo.',
-                confirmButtonColor: '#1a73e8'
-            });
+
+            // En algunos navegadores móviles el popup puede bloquearse
+            // (ej: modo privado extremo, navegadores con bloqueadores agresivos)
+            if (error.code === 'auth/popup-blocked') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Popup bloqueado',
+                    html: 'Tu navegador bloqueó la ventana de Google.<br><br>' +
+                          '<strong>Solución:</strong> Permite popups para este sitio en la configuración de tu navegador e intenta de nuevo.',
+                    confirmButtonColor: '#1a73e8',
+                    confirmButtonText: 'Entendido'
+                });
+            } else {
+                Swal.fire({
+                    icon: 'error', title: 'Error al iniciar sesión',
+                    text: 'No se pudo conectar con Google. Verifica tu conexión e intenta de nuevo.',
+                    confirmButtonColor: '#1a73e8'
+                });
+            }
         }
     }
 };
