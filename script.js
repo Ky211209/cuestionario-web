@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteField, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
 const app = initializeApp(firebaseConfig);
@@ -284,24 +284,32 @@ let startTime = null;
 let tiempoLimiteSegundos = 0;   // 0 = sin límite
 let tiempoRestante = 0;         // para cuenta regresiva
 
+// Genera un ID único y persistente para este dispositivo/navegador
+function getDeviceId() {
+    let id = localStorage.getItem('device_id');
+    if (!id) {
+        id = 'dev_' + Math.random().toString(36).substr(2, 12) + '_' + Date.now();
+        localStorage.setItem('device_id', id);
+    }
+    return id;
+}
+
 // 1. MANEJO DE SESIÓN PERMANENTE
 onAuthStateChanged(auth, async (user) => {
-    // IMPORTANTE: Asegurar que el enlace admin esté oculto por defecto
     const adminLinkContainer = document.getElementById('admin-link-container');
-    
+
     if (user) {
         const userEmail = user.email.toLowerCase();
-        console.log('Usuario autenticado:', userEmail);
-        
-        // Verificar si el usuario tiene acceso permitido
-        const tieneAcceso = USUARIOS_PERMITIDOS.includes(userEmail);
-        
-        if (!tieneAcceso) {
-            // Verificar en Firebase si está autorizado
+        const displayName = user.displayName || userEmail;
+        const esAdminUser = userEmail === ADMIN_EMAIL;
+        const enListaPermitidos = USUARIOS_PERMITIDOS.includes(userEmail);
+
+        // ── VERIFICAR ACCESO EN FIREBASE ──────────────────────────
+        let userData = null;
+        if (!esAdminUser) {
             try {
                 const userDoc = await getDoc(doc(db, "usuarios_seguros", userEmail));
                 if (!userDoc.exists()) {
-                    // Usuario no autorizado
                     await Swal.fire({
                         icon: 'error',
                         title: 'Acceso Denegado',
@@ -311,7 +319,7 @@ onAuthStateChanged(auth, async (user) => {
                     signOut(auth);
                     return;
                 }
-                // Usuario encontrado en Firebase → continuar normalmente
+                userData = userDoc.data();
             } catch (error) {
                 console.error('Error verificando usuario en Firebase:', error);
                 await Swal.fire({
@@ -324,38 +332,72 @@ onAuthStateChanged(auth, async (user) => {
                 return;
             }
         }
-        
-        // Inicializar módulo de seguridad
+
+        // ── VALIDAR LÍMITE DE DISPOSITIVOS ────────────────────────
+        if (!esAdminUser && userData) {
+            const maxDispositivos = userData.max_dispositivos || 2;
+            const dispositivosActivos = userData.dispositivos || {};
+            const deviceId = getDeviceId();
+
+            // Si este dispositivo no está registrado aún
+            if (!dispositivosActivos[deviceId]) {
+                const cantidadActual = Object.keys(dispositivosActivos).length;
+
+                if (cantidadActual >= maxDispositivos) {
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'Límite de dispositivos alcanzado',
+                        html: `Tu cuenta permite acceder desde <strong>${maxDispositivos}</strong> dispositivo(s).<br>
+                               Ya tienes <strong>${cantidadActual}</strong> dispositivo(s) registrado(s).<br><br>
+                               Contacta al administrador para restablecer tus dispositivos.`,
+                        confirmButtonText: 'Entendido',
+                        confirmButtonColor: '#ea4335'
+                    });
+                    signOut(auth);
+                    return;
+                }
+
+                // Registrar este nuevo dispositivo
+                const dispositivosActualizados = { ...dispositivosActivos };
+                dispositivosActualizados[deviceId] = {
+                    registrado: new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }),
+                    userAgent: navigator.userAgent.substring(0, 100)
+                };
+                try {
+                    await updateDoc(doc(db, "usuarios_seguros", userEmail), {
+                        dispositivos: dispositivosActualizados
+                    });
+                } catch(e) {
+                    console.warn('No se pudo registrar dispositivo:', e);
+                }
+            }
+        }
+
+        // ── INICIALIZAR SESIÓN ────────────────────────────────────
         currentUserEmail = userEmail;
-        // Protección contra displayName nulo (algunas cuentas Google no lo tienen)
-        currentUserName = user.displayName || userEmail;
+        currentUserName = displayName;
         crearMarcaDeAgua(userEmail);
         crearOverlay();
         registrarAcceso('inicio_sesion');
 
+        const maxDisp = userData?.max_dispositivos || 2;
+
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('setup-screen').classList.remove('hidden');
         document.getElementById('user-display').classList.remove('hidden');
-        // Fix: user.displayName puede ser null → usar currentUserName que ya tiene fallback
-        document.getElementById('user-info').innerText = `${currentUserName.toUpperCase()} (2 Disp.)`;
-        
-        // Mostrar enlace de panel admin SOLO si es la administradora
-        const esAdmin = userEmail === ADMIN_EMAIL;
-        console.log('¿Es administradora?', esAdmin, '(Email admin esperado:', ADMIN_EMAIL + ')');
-        
-        if (esAdmin) {
-            console.log('Mostrando enlace del panel admin');
+        document.getElementById('user-info').innerText = `${displayName.toUpperCase()} (${maxDisp} Disp.)`;
+
+        if (esAdminUser) {
             adminLinkContainer.classList.remove('hidden');
             adminLinkContainer.style.display = 'block';
         } else {
-            console.log('Ocultando enlace del panel admin');
             adminLinkContainer.classList.add('hidden');
             adminLinkContainer.style.display = 'none';
         }
-        
+
         cargarMaterias();
+
     } else {
-        console.log('Usuario no autenticado');
         document.getElementById('auth-screen').classList.remove('hidden');
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('user-display').classList.add('hidden');
@@ -1038,4 +1080,10 @@ document.getElementById('btn-header-return').onclick = () => {
     });
 };
 
-document.getElementById('btn-login').onclick = () => signInWithPopup(auth, provider);
+document.getElementById('btn-login').onclick = () => {
+    if (esMobile()) {
+        signInWithRedirect(auth, provider);
+    } else {
+        signInWithPopup(auth, provider);
+    }
+};
