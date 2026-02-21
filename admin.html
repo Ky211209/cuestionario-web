@@ -460,6 +460,22 @@
             .opciones-grid { grid-template-columns: 1fr; }
             .respuesta-selector { flex-wrap: wrap; }
         }
+
+        /* ---- ESTILOS DE IMPRESIÓN ---- */
+        @media print {
+            body * { visibility: hidden !important; }
+            #pdf-content, #pdf-content * { visibility: visible !important; }
+            #pdf-content {
+                position: fixed !important;
+                top: 0; left: 0;
+                width: 100% !important;
+                padding: 20px 30px !important;
+                border: none !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+            }
+            .pdf-pregunta { page-break-inside: avoid; }
+        }
     </style>
 </head>
 <body>
@@ -490,6 +506,9 @@
             </button>
             <button onclick="changeTab('tab-auditoria')" id="btn-tab-auditoria" class="tab-btn">
                 <i class="fas fa-clipboard-list"></i> Auditoría
+            </button>
+            <button onclick="changeTab('tab-imprimir')" id="btn-tab-imprimir" class="tab-btn">
+                <i class="fas fa-print"></i> Imprimir PDF
             </button>
         </nav>
 
@@ -1398,12 +1417,144 @@
         // ================================================================
         //  NAVEGACIÓN DE TABS
         // ================================================================
+        // ================================================================
+        //  MÓDULO IMPRIMIR PDF
+        // ================================================================
+
+        // Llenar select de materias en tab imprimir
+        function llenarSelectImpresion() {
+            const sel = document.getElementById('imprimir-materia-select');
+            if (!sel) return;
+            sel.innerHTML = '<option value="">— Selecciona una materia —</option>';
+            materias.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.nombre;
+                sel.appendChild(opt);
+            });
+        }
+        llenarSelectImpresion();
+
+        document.getElementById('btn-generar-pdf').onclick = async () => {
+            const materiaId = document.getElementById('imprimir-materia-select').value;
+            if (!materiaId) {
+                Swal.fire('Atención', 'Selecciona una materia primero.', 'warning');
+                return;
+            }
+
+            const mostrarResp = document.getElementById('imprimir-mostrar-respuestas').value === 'si';
+            const cantidadVal = document.getElementById('imprimir-cantidad').value;
+            const nombreMateria = materias.find(m => m.id === materiaId)?.nombre || materiaId;
+
+            const btn = document.getElementById('btn-generar-pdf');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
+
+            try {
+                const snap = await getDocs(collection(db, `bancos_preguntas/${materiaId}/preguntas`));
+                let preguntas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                if (preguntas.length === 0) {
+                    Swal.fire('Sin preguntas', 'No hay preguntas cargadas para esta materia.', 'info');
+                    return;
+                }
+
+                if (cantidadVal !== 'todas') {
+                    preguntas = preguntas.slice(0, parseInt(cantidadVal));
+                }
+
+                const letrasOpc = ['A', 'B', 'C', 'D'];
+                const fecha = new Date().toLocaleDateString('es-EC', {
+                    year: 'numeric', month: 'long', day: 'numeric'
+                });
+
+                let html = `
+                    <div style="text-align:center; margin-bottom:30px; border-bottom:2px solid #1a73e8; padding-bottom:20px;">
+                        <div style="font-size:0.8rem; color:#888; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;">Universidad Estatal de Milagro · UNEMI</div>
+                        <h1 style="font-size:1.5rem; color:#1a73e8; margin:0 0 6px 0; font-family:'Segoe UI',sans-serif;">${nombreMateria}</h1>
+                        <div style="font-size:0.85rem; color:#666;">Banco de Preguntas · ${preguntas.length} pregunta${preguntas.length !== 1 ? 's' : ''} · Generado el ${fecha}</div>
+                        ${mostrarResp ? '' : '<div style="margin-top:10px; background:#fff3cd; color:#856404; padding:6px 14px; border-radius:20px; font-size:0.78rem; display:inline-block; font-weight:600;">⚠ MODO EXAMEN · Sin respuestas marcadas</div>'}
+                    </div>
+                `;
+
+                preguntas.forEach((p, idx) => {
+                    const texto = p.texto || p.pregunta || p.explicacion || 'Sin texto';
+                    const opciones = p.opciones || [];
+                    const correcta = p.respuesta;
+
+                    html += `
+                        <div class="pdf-pregunta" style="margin-bottom:22px; padding:16px 18px; border-left:3px solid #1a73e8; background:#fafafa; border-radius:0 8px 8px 0; page-break-inside:avoid;">
+                            <p style="font-weight:700; font-size:0.95rem; margin:0 0 12px 0; color:#202124;">
+                                <span style="background:#1a73e8; color:white; padding:2px 9px; border-radius:4px; font-size:0.8rem; margin-right:8px; font-family:monospace;">${idx + 1}</span>
+                                ${escapeHtml(texto)}
+                            </p>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-left:8px;">
+                    `;
+
+                    opciones.forEach((op, oi) => {
+                        const esCorrecta = mostrarResp && oi === correcta;
+                        html += `
+                            <div style="
+                                padding:7px 12px;
+                                border-radius:6px;
+                                font-size:0.87rem;
+                                border:1.5px solid ${esCorrecta ? '#34a853' : '#e0e0e0'};
+                                background:${esCorrecta ? '#e6f4ea' : 'white'};
+                                color:${esCorrecta ? '#1e7e34' : '#444'};
+                                font-weight:${esCorrecta ? '700' : '400'};
+                                display:flex; align-items:center; gap:8px;
+                            ">
+                                <span style="
+                                    background:${esCorrecta ? '#34a853' : '#e8f0fe'};
+                                    color:${esCorrecta ? 'white' : '#1a73e8'};
+                                    width:22px; height:22px; border-radius:50%;
+                                    display:inline-flex; align-items:center; justify-content:center;
+                                    font-size:0.75rem; font-weight:800; flex-shrink:0;
+                                ">${letrasOpc[oi]}</span>
+                                ${escapeHtml(op)}
+                                ${esCorrecta ? '<span style="margin-left:auto;">✓</span>' : ''}
+                            </div>
+                        `;
+                    });
+
+                    html += `</div>`;
+
+                    // Mostrar explicación si existe y se muestran respuestas
+                    if (mostrarResp && p.explicacion_correcta) {
+                        html += `
+                            <div style="margin-top:10px; padding:8px 12px; background:#e8f0fe; border-radius:6px; font-size:0.8rem; color:#1a73e8;">
+                                <strong>💡 Explicación:</strong> ${escapeHtml(p.explicacion_correcta)}
+                            </div>
+                        `;
+                    }
+
+                    html += `</div>`;
+                });
+
+                document.getElementById('pdf-content').innerHTML = html;
+                document.getElementById('pdf-preview-area').style.display = 'block';
+                document.getElementById('pdf-empty-state').style.display = 'none';
+                document.getElementById('pdf-info-label').innerText =
+                    `📄 ${preguntas.length} preguntas de "${nombreMateria}" · ${mostrarResp ? 'Con respuestas' : 'Sin respuestas (modo examen)'}`;
+
+                // Scroll al preview
+                document.getElementById('pdf-preview-area').scrollIntoView({ behavior: 'smooth' });
+
+            } catch(e) {
+                console.error(e);
+                Swal.fire('Error', 'No se pudieron cargar las preguntas: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-eye"></i> Previsualizar';
+            }
+        };
+
         window.changeTab = (id) => {
-            ['tab-preguntas', 'tab-excel', 'tab-users', 'tab-auditoria'].forEach(t => {
+            ['tab-preguntas', 'tab-excel', 'tab-users', 'tab-auditoria', 'tab-imprimir'].forEach(t => {
                 document.getElementById(t).classList.toggle('hidden', t !== id);
             });
             // Actualizar botones activos
-            ['btn-tab-preguntas', 'btn-tab-excel', 'btn-tab-users', 'btn-tab-auditoria'].forEach(b => {
+            ['btn-tab-preguntas', 'btn-tab-excel', 'btn-tab-users', 'btn-tab-auditoria', 'btn-tab-imprimir'].forEach(b => {
                 document.getElementById(b).classList.remove('active');
             });
             document.getElementById(`btn-tab-${id.replace('tab-', '')}`).classList.add('active');
