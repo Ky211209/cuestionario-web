@@ -1316,13 +1316,25 @@
                 const rolBadge = rol === 'admin'
                     ? `<span style="background:#e8f0fe;color:#1a73e8;padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:700;">🔑 Admin</span>`
                     : `<span style="background:#f0f4f0;color:#5f6368;padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:700;">👤 Usuario</span>`;
+                const dispositivosActivos = Object.keys(data.dispositivos || {}).length;
+                const maxDisp = data.max_dispositivos || 1;
+                const dispColor = dispositivosActivos >= maxDisp ? '#ea4335' : '#34a853';
+                const dispBadge = `<span style="background:${dispColor}20;color:${dispColor};padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:700;">${dispositivosActivos}/${maxDisp}</span>`;
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td style="font-size:0.82rem;">${d.id}</td>
                     <td>${rolBadge}</td>
-                    <td>${data.max_dispositivos || 1}</td>
+                    <td>${dispBadge}</td>
                     <td>
                         <button onclick="window.prepareEdit('${d.id}')" class="btn-edit" title="Editar"><i class="fas fa-edit"></i></button>
+                        <button onclick="window.resetDispositivos('${d.id}')" 
+                            style="background:#e8f0fe;color:#1a73e8;border:1px solid #c5d8fb;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.82rem;font-weight:600;transition:all 0.2s;"
+                            title="Resetear dispositivos registrados"
+                            onmouseover="this.style.background='#1a73e8';this.style.color='white';"
+                            onmouseout="this.style.background='#e8f0fe';this.style.color='#1a73e8';">
+                            <i class="fas fa-rotate-right"></i> Reset
+                        </button>
                         <button onclick="window.confirmDelete('${d.id}')" class="btn-delete" title="Eliminar"><i class="fas fa-trash"></i></button>
                     </td>`;
                 body.appendChild(tr);
@@ -1354,6 +1366,37 @@
             });
         };
 
+        window.resetDispositivos = (email) => {
+            Swal.fire({
+                title: '¿Resetear dispositivos?',
+                html: `<p style="color:#444;">Se eliminarán <strong>todos los dispositivos registrados</strong> de:<br>
+                       <code style="background:#f0f2f5;padding:4px 10px;border-radius:6px;font-size:0.9rem;">${email}</code></p>
+                       <p style="color:#888;font-size:0.85rem;margin-top:10px;">El alumno podrá volver a registrar hasta el límite permitido desde cero.</p>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-rotate-right"></i> Sí, resetear',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#1a73e8',
+                cancelButtonColor: '#5f6368'
+            }).then(async (r) => {
+                if (!r.isConfirmed) return;
+                try {
+                    await updateDoc(doc(db, "usuarios_seguros", email), { dispositivos: {} });
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Dispositivos reseteados!',
+                        html: `<p>Los dispositivos de <strong>${email}</strong> han sido borrados.</p>
+                               <p style="color:#888;font-size:0.85rem;">El alumno puede volver a ingresar desde sus dispositivos normalmente.</p>`,
+                        timer: 3000,
+                        showConfirmButton: false
+                    });
+                    loadUsers();
+                } catch(e) {
+                    Swal.fire('Error', 'No se pudo resetear: ' + e.message, 'error');
+                }
+            });
+        };
+
         document.getElementById('btn-update-user').onclick = async () => {
             const email = document.getElementById('edit-email').value.trim().toLowerCase();
             if (!email) return Swal.fire('Atención', 'Escribe el correo del alumno.', 'warning');
@@ -1374,7 +1417,7 @@
             const datos = { max_dispositivos: maxDisp, rol };
             if (rol === 'usuario') datos.materias = materiasAsignadas;
 
-            await setDoc(doc(db, "usuarios_seguros", email), datos);
+            await setDoc(doc(db, "usuarios_seguros", email), datos, { merge: true });
             Swal.fire({ icon: 'success', title: '¡Guardado!',
                 text: `${email} actualizado como ${rol === 'admin' ? 'Administrador' : 'Usuario'}.`,
                 timer: 2000, showConfirmButton: false });
