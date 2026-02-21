@@ -1,11 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-// ── FUNCIONES UTILITARIAS (deben ir antes de todo) ──────────────────────────
-function esMobile() {
-    return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
-}
 
 function getDeviceId() {
     let id = localStorage.getItem('device_id');
@@ -22,10 +17,21 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-// Capturar resultado de redirect (para móviles)
-getRedirectResult(auth).catch((error) => {
-    if (error && error.code && error.code !== 'auth/no-current-user') {
-        console.error('Error redirect:', error);
+// Capturar resultado del redirect de Google al volver a la página
+getRedirectResult(auth).then((result) => {
+    // El onAuthStateChanged se encarga del resto automáticamente
+    if (result && result.user) {
+        console.log('Redirect login exitoso:', result.user.email);
+    }
+}).catch((error) => {
+    if (error.code && error.code !== 'auth/no-current-user') {
+        console.error('Error en redirect:', error.code, error.message);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error al iniciar sesión',
+            html: `No se pudo completar el inicio de sesión.<br><small style="color:#999">${error.code}</small>`,
+            confirmButtonText: 'Entendido'
+        });
     }
 });
 
@@ -314,6 +320,7 @@ onAuthStateChanged(auth, async (user) => {
         const displayName = user.displayName || userEmail;
         const esAdminUser = userEmail === ADMIN_EMAIL;
 
+        // Verificar acceso en Firebase
         let userData = null;
         if (!esAdminUser) {
             try {
@@ -342,6 +349,7 @@ onAuthStateChanged(auth, async (user) => {
             }
         }
 
+        // Validar límite de dispositivos
         if (!esAdminUser && userData) {
             const maxDispositivos = userData.max_dispositivos || 2;
             const dispositivosActivos = userData.dispositivos || {};
@@ -377,6 +385,7 @@ onAuthStateChanged(auth, async (user) => {
             }
         }
 
+        // Inicializar sesión
         currentUserEmail = userEmail;
         currentUserName = displayName;
         crearMarcaDeAgua(userEmail);
@@ -384,7 +393,6 @@ onAuthStateChanged(auth, async (user) => {
         registrarAcceso('inicio_sesion');
 
         const maxDisp = userData?.max_dispositivos || 2;
-
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('setup-screen').classList.remove('hidden');
         document.getElementById('user-display').classList.remove('hidden');
@@ -1083,32 +1091,13 @@ document.getElementById('btn-header-return').onclick = () => {
     });
 };
 
-document.getElementById('btn-login').onclick = async () => {
-    const btn = document.getElementById('btn-login');
-    btn.disabled = true;
-    btn.textContent = 'Conectando...';
-    try {
-        if (esMobile()) {
-            await signInWithRedirect(auth, provider);
-        } else {
-            await signInWithPopup(auth, provider);
-        }
-    } catch (err) {
-        console.error('Error login:', err);
-        if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
-            // Fallback a redirect si el popup fue bloqueado
-            try {
-                await signInWithRedirect(auth, provider);
-            } catch(err2) {
-                Swal.fire({ icon: 'error', title: 'Popups bloqueados',
-                    text: 'Habilita los popups para este sitio en tu navegador e intenta de nuevo.' });
-            }
-        } else if (err.code !== 'auth/cancelled-popup-request') {
-            Swal.fire({ icon: 'error', title: 'Error al iniciar sesión',
-                html: `Código: <code>${err.code}</code><br>${err.message}` });
-        }
-    } finally {
-        btn.disabled = false;
-        btn.textContent = 'Acceder con Google';
-    }
+document.getElementById('btn-login').onclick = () => {
+    document.getElementById('btn-login').textContent = 'Redirigiendo...';
+    document.getElementById('btn-login').disabled = true;
+    signInWithRedirect(auth, provider).catch(err => {
+        console.error('Error al redirigir:', err);
+        document.getElementById('btn-login').textContent = 'Acceder con Google';
+        document.getElementById('btn-login').disabled = false;
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+    });
 };
