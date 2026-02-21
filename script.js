@@ -19,15 +19,65 @@ const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
+// ================================================================
+// CONTROL DE ESTADO DE CARGA - Evita parpadeo en la pantalla de auth
+// durante la redirección de Google
+// ================================================================
+let redirectResultResuelto = false;
+
+// Mostrar pantalla de carga mientras se espera el resultado del redirect
+function mostrarPantallaCarga() {
+    const authScreen = document.getElementById('auth-screen');
+    authScreen.innerHTML = `
+        <div style="text-align:center; padding: 20px;">
+            <div style="font-size:2rem; margin-bottom:15px;">⏳</div>
+            <p style="color:#1a73e8; font-weight:600;">Verificando sesión...</p>
+            <p style="color:#888; font-size:0.85rem; margin-top:8px;">Por favor espera</p>
+        </div>
+    `;
+    authScreen.classList.remove('hidden');
+}
+
+function restaurarPantallaLogin() {
+    const authScreen = document.getElementById('auth-screen');
+    authScreen.innerHTML = `
+        <h2>Bienvenido</h2>
+        <button id="btn-login" class="btn-primary" style="margin-top: 20px;">Acceder con Google</button>
+    `;
+    // Re-asignar el evento al nuevo botón
+    document.getElementById('btn-login').onclick = () => {
+        const btn = document.getElementById('btn-login');
+        btn.textContent = 'Redirigiendo...';
+        btn.disabled = true;
+        signInWithRedirect(auth, provider).catch(err => {
+            console.error('Error al redirigir:', err);
+            btn.textContent = 'Acceder con Google';
+            btn.disabled = false;
+            Swal.fire({ 
+                icon: 'error', 
+                title: 'Error al iniciar sesión',
+                html: `Código: <code>${err.code}</code><br><small>${err.message}</small>`,
+                confirmButtonText: 'Entendido'
+            });
+        });
+    };
+}
+
+// Mostrar carga inmediatamente (antes de que getRedirectResult resuelva)
+mostrarPantallaCarga();
+
 // Capturar resultado del redirect de Google al volver a la página
 getRedirectResult(auth).then((result) => {
     if (result && result.user) {
         console.log('Redirect login exitoso:', result.user.email);
         // onAuthStateChanged se encarga del flujo
     }
+    redirectResultResuelto = true;
 }).catch((error) => {
+    redirectResultResuelto = true;
     console.error('Error en redirect:', error.code, error.message);
     if (error.code === 'auth/unauthorized-domain') {
+        restaurarPantallaLogin();
         Swal.fire({
             icon: 'error',
             title: 'Dominio no autorizado',
@@ -35,12 +85,16 @@ getRedirectResult(auth).then((result) => {
             confirmButtonText: 'Entendido'
         });
     } else if (error.code && error.code !== 'auth/no-current-user' && error.code !== 'auth/null-user') {
+        restaurarPantallaLogin();
         Swal.fire({
             icon: 'error',
             title: 'Error al iniciar sesión',
             html: `No se pudo completar el inicio de sesión.<br><small style="color:#999">${error.code}: ${error.message}</small>`,
             confirmButtonText: 'Entendido'
         });
+    } else {
+        // Sin error real, simplemente restaurar login
+        restaurarPantallaLogin();
     }
 });
 
@@ -321,10 +375,24 @@ let tiempoLimiteSegundos = 0;   // 0 = sin límite
 let tiempoRestante = 0;         // para cuenta regresiva
 
 // 1. MANEJO DE SESIÓN PERMANENTE
+// Esta bandera evita que si onAuthStateChanged se dispara varias veces
+// (lo que Firebase hace normalmente al refrescar tokens), el flujo de
+// verificación de dispositivos se ejecute más de una vez por sesión.
+let sesionInicializada = false;
+
 onAuthStateChanged(auth, async (user) => {
     const adminLinkContainer = document.getElementById('admin-link-container');
 
+    // Si no hay usuario y el redirect aún no resolvió, esperamos
+    // para evitar parpadeo en la pantalla de bienvenido
+    if (!user && !redirectResultResuelto) return;
+
     if (user) {
+        // Si la sesión ya fue inicializada en esta carga de página, no repetir
+        // (Firebase puede disparar onAuthStateChanged varias veces al refrescar token)
+        if (sesionInicializada) return;
+        sesionInicializada = true;
+
         const userEmail = user.email.toLowerCase();
         const displayName = user.displayName || userEmail;
         const esAdminUser = userEmail === ADMIN_EMAIL;
@@ -335,6 +403,7 @@ onAuthStateChanged(auth, async (user) => {
             try {
                 const userDoc = await getDoc(doc(db, "usuarios_seguros", userEmail));
                 if (!userDoc.exists()) {
+                    sesionInicializada = false; // Permitir retry si fue error transitorio
                     await Swal.fire({
                         icon: 'error',
                         title: 'Acceso Denegado',
@@ -346,27 +415,38 @@ onAuthStateChanged(auth, async (user) => {
                 }
                 userData = userDoc.data();
             } catch (error) {
+                sesionInicializada = false;
                 console.error('Error verificando usuario:', error);
-                await Swal.fire({
-                    icon: 'error',
+                // Si es error de red/permisos, no expulsar al usuario — mostrar retry
+                const resultado = await Swal.fire({
+                    icon: 'warning',
                     title: 'Error de conexión',
-                    text: 'No se pudo verificar tu acceso. Revisa tu conexión e intenta de nuevo.',
-                    confirmButtonText: 'Entendido'
+                    text: 'No se pudo verificar tu acceso. ¿Deseas intentar de nuevo?',
+                    confirmButtonText: 'Reintentar',
+                    cancelButtonText: 'Cerrar sesión',
+                    showCancelButton: true,
+                    confirmButtonColor: '#1a73e8'
                 });
-                signOut(auth);
+                if (resultado.isConfirmed) {
+                    location.reload(); // Recargar para reintentar todo el flujo
+                } else {
+                    signOut(auth);
+                }
                 return;
             }
         }
 
-        // Validar límite de dispositivos
+        // Validar límite de dispositivos (solo si es usuario normal y tenemos sus datos)
         if (!esAdminUser && userData) {
             const maxDispositivos = userData.max_dispositivos || 2;
             const dispositivosActivos = userData.dispositivos || {};
             const deviceId = getDeviceId();
 
             if (!dispositivosActivos[deviceId]) {
+                // Este dispositivo no está registrado aún
                 const cantidadActual = Object.keys(dispositivosActivos).length;
                 if (cantidadActual >= maxDispositivos) {
+                    sesionInicializada = false;
                     await Swal.fire({
                         icon: 'error',
                         title: 'Límite de dispositivos alcanzado',
@@ -379,6 +459,7 @@ onAuthStateChanged(auth, async (user) => {
                     signOut(auth);
                     return;
                 }
+                // Registrar este nuevo dispositivo
                 const nuevosDisp = { ...dispositivosActivos };
                 nuevosDisp[deviceId] = {
                     registrado: new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }),
@@ -388,9 +469,13 @@ onAuthStateChanged(auth, async (user) => {
                     await updateDoc(doc(db, "usuarios_seguros", userEmail), {
                         dispositivos: nuevosDisp
                     });
+                    console.log('✅ Nuevo dispositivo registrado:', deviceId);
                 } catch(e) {
-                    console.warn('No se pudo registrar dispositivo:', e);
+                    // No bloquear el acceso si falla el registro del dispositivo
+                    console.warn('No se pudo registrar dispositivo (acceso permitido de todas formas):', e);
                 }
+            } else {
+                console.log('✅ Dispositivo ya registrado:', deviceId);
             }
         }
 
@@ -418,6 +503,8 @@ onAuthStateChanged(auth, async (user) => {
         cargarMaterias();
 
     } else {
+        sesionInicializada = false;
+        restaurarPantallaLogin();
         document.getElementById('auth-screen').classList.remove('hidden');
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('user-display').classList.add('hidden');
@@ -1100,19 +1187,4 @@ document.getElementById('btn-header-return').onclick = () => {
     });
 };
 
-document.getElementById('btn-login').onclick = () => {
-    const btn = document.getElementById('btn-login');
-    btn.textContent = 'Redirigiendo...';
-    btn.disabled = true;
-    signInWithRedirect(auth, provider).catch(err => {
-        console.error('Error al redirigir:', err);
-        btn.textContent = 'Acceder con Google';
-        btn.disabled = false;
-        Swal.fire({ 
-            icon: 'error', 
-            title: 'Error al iniciar sesión',
-            html: `Código: <code>${err.code}</code><br><small>${err.message}</small>`,
-            confirmButtonText: 'Entendido'
-        });
-    });
-};
+// Nota: el evento de btn-login se asigna dinámicamente en restaurarPantallaLogin()
