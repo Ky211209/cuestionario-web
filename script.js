@@ -22,10 +22,10 @@ const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
-// FIX MÓVIL: Manejar resultado del redirect cuando regresa de Google
+// FIX MÓVIL: capturar resultado al regresar de Google
 getRedirectResult(auth).catch(err => {
     if (err && err.code !== 'auth/cancelled-popup-request') {
-        console.error('Error redirect result:', err);
+        console.error('Error redirect:', err.code);
     }
 });
 
@@ -234,18 +234,18 @@ onAuthStateChanged(auth, async (user) => {
 async function cargarMaterias() {
     try {
         let data = null;
-        const rutasBase = ['config-materias.json', './config-materias.json',
-            `${location.pathname.replace(/\/[^\/]*$/, '')}/config-materias.json`];
-        for (const ruta of rutasBase) {
+        const _rutas = ['config-materias.json', './config-materias.json',
+            location.pathname.replace(/\/[^\/]*$/, '') + '/config-materias.json'];
+        for (const ruta of _rutas) {
             try { const res = await fetch(ruta); if (res.ok) { data = await res.json(); break; } } catch(e) { continue; }
         }
         if (!data) { data = { materias: [
-            { id: "comp-forense",   nombre: "Computación Forense",        activa: true },
-            { id: "deontologia",    nombre: "Deontología",                 activa: true },
-            { id: "auditoria-ti",   nombre: "Auditoría de TI",             activa: true },
-            { id: "emprendimiento", nombre: "Emprendimiento e Innovación", activa: true },
-            { id: "ia",             nombre: "Inteligencia Artificial",     activa: true },
-            { id: "practicas-1",    nombre: "Prácticas Laborales 1",       activa: true }
+            { id:'comp-forense',   nombre:'Computación Forense',        activa:true },
+            { id:'deontologia',    nombre:'Deontología',                 activa:true },
+            { id:'auditoria-ti',   nombre:'Auditoría de TI',             activa:true },
+            { id:'emprendimiento', nombre:'Emprendimiento e Innovación', activa:true },
+            { id:'ia',             nombre:'Inteligencia Artificial',     activa:true },
+            { id:'practicas-1',    nombre:'Prácticas Laborales 1',       activa:true }
         ] }; }
 
         let materiasVisibles = data.materias.filter(m => m.activa);
@@ -508,18 +508,15 @@ document.getElementById('btn-header-return').onclick = () => {
     .then(res => { if(res.isConfirmed) { stopTimer(); location.reload(); } });
 };
 
-// FIX MÓVIL: Detectar dispositivo y usar método correcto
+// FIX MÓVIL: redirect en Android/iOS, popup en desktop
 function esMobil() {
     return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
 }
-
 document.getElementById('btn-login').onclick = () => {
     const btn = document.getElementById('btn-login');
     btn.textContent = 'Conectando...';
     btn.disabled = true;
-
     if (esMobil()) {
-        // En móvil usar redirect — evita el bloqueo de popups en Chrome Android
         signInWithRedirect(auth, provider).catch(err => {
             console.error('Error redirect:', err);
             btn.textContent = 'Acceder con Google';
@@ -527,9 +524,8 @@ document.getElementById('btn-login').onclick = () => {
             Swal.fire({ icon:'error', title:'Error al iniciar sesión', html:`Código: <code>${err.code}</code><br><small>${err.message}</small>`, confirmButtonText:'Entendido' });
         });
     } else {
-        // En desktop usar popup
         signInWithPopup(auth, provider).catch(err => {
-            console.error('Error al iniciar sesión:', err);
+            console.error('Error popup:', err);
             btn.textContent = 'Acceder con Google';
             btn.disabled = false;
             if (err.code !== 'auth/popup-closed-by-user') {
@@ -538,4 +534,3 @@ document.getElementById('btn-login').onclick = () => {
         });
     }
 };
-
