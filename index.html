@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ElisaQuizizz v2.0</title>
+    <title>QuizEli - Simulador Académico</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -12,11 +12,11 @@
     <header>
         <div class="logo">
             <i class="fa-solid fa-brain" style="color: #1a73e8;"></i>
-            <h1>Elisa <span class="subtitle">Quizizz v2.0</span></h1>
+            <h1>QuizEli <span class="subtitle">Académico</span></h1>
         </div>
-        <div id="user-display" class="hidden" style="display: flex; align-items: center; gap: 15px;">
-            <button id="btn-header-return" class="btn-back hidden"><i class="fas fa-arrow-left"></i> Volver al Menú</button>
-            <span id="user-info" style="font-weight: bold; color: #1a73e8; font-size: 0.9rem;"></span>
+        <div id="user-display" class="hidden" style="display: flex; align-items: center; gap: 10px;">
+            <button id="btn-header-return" class="btn-back hidden"><i class="fas fa-arrow-left"></i> <span>Volver al Menú</span></button>
+            <span id="user-info"></span>
             <button id="btn-logout" class="btn-secondary">Cerrar Sesión</button>
         </div>
     </header>
@@ -27,6 +27,24 @@
     </div>
 
     <div class="container hidden" id="setup-screen">
+        <!-- Tarjeta de bienvenida -->
+        <div id="user-welcome-card" style="
+            background: linear-gradient(135deg, #1a73e8, #1557b0);
+            color: white;
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-align: left;
+        ">
+            <i class="fas fa-user-circle" style="font-size: 2rem; opacity: 0.9; flex-shrink:0;"></i>
+            <div style="min-width:0;">
+                <div id="user-welcome-name" style="font-weight: 700; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+                <div id="user-welcome-sub" style="font-size: 0.75rem; opacity: 0.8; margin-top: 2px;"></div>
+            </div>
+        </div>
         <div style="text-align: left; margin-bottom: 15px;">
             <label style="font-weight: bold; display: block; margin-bottom: 5px;">Materia</label>
             <select id="subject-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;"></select>
@@ -76,5 +94,3 @@
     <script type="module" src="script.js"></script>
 </body>
 </html>
-
-
