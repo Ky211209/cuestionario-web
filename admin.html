@@ -461,7 +461,6 @@
             .respuesta-selector { flex-wrap: wrap; }
         }
 
-        /* ---- ESTILOS DE IMPRESIÓN ---- */
         @media print {
             body * { visibility: hidden !important; }
             #pdf-content, #pdf-content * { visibility: visible !important; }
@@ -473,6 +472,7 @@
                 border: none !important;
                 box-shadow: none !important;
                 border-radius: 0 !important;
+                font-size: 12pt;
             }
             .pdf-pregunta { page-break-inside: avoid; }
         }
@@ -662,6 +662,59 @@
             <p id="auditoria-count" style="font-size: 0.8rem; color: #888; margin-top: 10px; text-align: right;"></p>
         </div>
     </div>
+
+        <!-- TAB: IMPRIMIR PDF -->
+        <div id="tab-imprimir" class="hidden">
+            <div style="margin-bottom:20px;">
+                <h3 style="font-size:1.1rem; color:#202124; font-weight:700; margin-bottom:4px;">
+                    <i class="fas fa-print" style="color:#1a73e8;"></i> Vista de Impresión / PDF
+                </h3>
+                <p style="font-size:0.82rem; color:#888;">Genera un listado completo de preguntas listo para imprimir o exportar como PDF.</p>
+            </div>
+
+            <div class="crud-filtros" style="margin-bottom:20px;">
+                <div class="filtro-group">
+                    <label><i class="fas fa-book"></i> Materia</label>
+                    <select id="imprimir-materia-select" style="width:100%; padding:9px 12px; border-radius:7px; border:1.5px solid #ddd; font-size:0.88rem; background:white;"></select>
+                </div>
+                <div class="filtro-group">
+                    <label><i class="fas fa-eye"></i> Mostrar respuestas</label>
+                    <select id="imprimir-mostrar-respuestas" style="width:100%; padding:9px 12px; border-radius:7px; border:1.5px solid #ddd; font-size:0.88rem; background:white;">
+                        <option value="si">✅ Sí, marcar respuesta correcta</option>
+                        <option value="no">❌ No (modo examen)</option>
+                    </select>
+                </div>
+                <div class="filtro-group">
+                    <label><i class="fas fa-sort-numeric-up"></i> Cantidad</label>
+                    <select id="imprimir-cantidad" style="width:100%; padding:9px 12px; border-radius:7px; border:1.5px solid #ddd; font-size:0.88rem; background:white;">
+                        <option value="todas">Todas las preguntas</option>
+                        <option value="20">20 preguntas</option>
+                        <option value="30">30 preguntas</option>
+                        <option value="50">50 preguntas</option>
+                    </select>
+                </div>
+                <div style="display:flex; gap:8px; align-items:flex-end;">
+                    <button id="btn-generar-pdf" class="btn-primary" style="padding:9px 18px; font-size:0.85rem; border-radius:7px; white-space:nowrap;">
+                        <i class="fas fa-eye"></i> Previsualizar
+                    </button>
+                </div>
+            </div>
+
+            <div id="pdf-empty-state" class="empty-state">
+                <i class="fas fa-file-pdf"></i>
+                <p>Selecciona una materia y presiona <strong>Previsualizar</strong>.</p>
+            </div>
+
+            <div id="pdf-preview-area" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+                    <span id="pdf-info-label" style="font-size:0.85rem; color:#666;"></span>
+                    <button onclick="window.print()" style="background:linear-gradient(135deg,#ea4335,#c5221f);color:white;padding:10px 24px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:0.9rem;display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(234,67,53,0.35);">
+                        <i class="fas fa-file-pdf"></i> Guardar como PDF / Imprimir
+                    </button>
+                </div>
+                <div id="pdf-content" style="background:white;border:1px solid #e0e0e0;border-radius:10px;padding:40px;font-family:Georgia,serif;line-height:1.6;box-shadow:0 2px 12px rgba(0,0,0,0.06);"></div>
+            </div>
+        </div>
 
     <!-- ================================================================
          MODAL: AGREGAR / EDITAR PREGUNTA
@@ -1417,11 +1470,24 @@
         // ================================================================
         //  NAVEGACIÓN DE TABS
         // ================================================================
+        window.changeTab = (id) => {
+            ['tab-preguntas', 'tab-excel', 'tab-users', 'tab-auditoria', 'tab-imprimir'].forEach(t => {
+                document.getElementById(t).classList.toggle('hidden', t !== id);
+            });
+            // Actualizar botones activos
+            ['btn-tab-preguntas', 'btn-tab-excel', 'btn-tab-users', 'btn-tab-auditoria', 'btn-tab-imprimir'].forEach(b => {
+                document.getElementById(b).classList.remove('active');
+            });
+            document.getElementById(`btn-tab-${id.replace('tab-', '')}`).classList.add('active');
+
+            if (id === 'tab-users') loadUsers();
+            if (id === 'tab-auditoria') cargarAuditoria();
+        };
+
+
         // ================================================================
         //  MÓDULO IMPRIMIR PDF
         // ================================================================
-
-        // Llenar select de materias en tab imprimir
         function llenarSelectImpresion() {
             const sel = document.getElementById('imprimir-materia-select');
             if (!sel) return;
@@ -1441,7 +1507,6 @@
                 Swal.fire('Atención', 'Selecciona una materia primero.', 'warning');
                 return;
             }
-
             const mostrarResp = document.getElementById('imprimir-mostrar-respuestas').value === 'si';
             const cantidadVal = document.getElementById('imprimir-cantidad').value;
             const nombreMateria = materias.find(m => m.id === materiaId)?.nombre || materiaId;
@@ -1455,7 +1520,7 @@
                 let preguntas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
                 if (preguntas.length === 0) {
-                    Swal.fire('Sin preguntas', 'No hay preguntas cargadas para esta materia.', 'info');
+                    Swal.fire('Sin preguntas', 'No hay preguntas para esta materia.', 'info');
                     return;
                 }
 
@@ -1464,16 +1529,14 @@
                 }
 
                 const letrasOpc = ['A', 'B', 'C', 'D'];
-                const fecha = new Date().toLocaleDateString('es-EC', {
-                    year: 'numeric', month: 'long', day: 'numeric'
-                });
+                const fecha = new Date().toLocaleDateString('es-EC', { year:'numeric', month:'long', day:'numeric' });
 
                 let html = `
-                    <div style="text-align:center; margin-bottom:30px; border-bottom:2px solid #1a73e8; padding-bottom:20px;">
-                        <div style="font-size:0.8rem; color:#888; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;">Universidad Estatal de Milagro · UNEMI</div>
-                        <h1 style="font-size:1.5rem; color:#1a73e8; margin:0 0 6px 0; font-family:'Segoe UI',sans-serif;">${nombreMateria}</h1>
-                        <div style="font-size:0.85rem; color:#666;">Banco de Preguntas · ${preguntas.length} pregunta${preguntas.length !== 1 ? 's' : ''} · Generado el ${fecha}</div>
-                        ${mostrarResp ? '' : '<div style="margin-top:10px; background:#fff3cd; color:#856404; padding:6px 14px; border-radius:20px; font-size:0.78rem; display:inline-block; font-weight:600;">⚠ MODO EXAMEN · Sin respuestas marcadas</div>'}
+                    <div style="text-align:center;margin-bottom:30px;border-bottom:3px solid #1a73e8;padding-bottom:20px;">
+                        <div style="font-size:0.78rem;color:#888;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Universidad Estatal de Milagro · UNEMI</div>
+                        <h1 style="font-size:1.5rem;color:#1a73e8;margin:0 0 6px 0;font-family:'Segoe UI',sans-serif;">${nombreMateria}</h1>
+                        <div style="font-size:0.85rem;color:#666;">Banco de Preguntas · ${preguntas.length} pregunta${preguntas.length!==1?'s':''} · ${fecha}</div>
+                        ${!mostrarResp ? '<div style="margin-top:10px;background:#fff3cd;color:#856404;padding:6px 14px;border-radius:20px;font-size:0.78rem;display:inline-block;font-weight:600;">⚠ MODO EXAMEN · Sin respuestas marcadas</div>' : ''}
                     </div>
                 `;
 
@@ -1482,63 +1545,35 @@
                     const opciones = p.opciones || [];
                     const correcta = p.respuesta;
 
-                    html += `
-                        <div class="pdf-pregunta" style="margin-bottom:22px; padding:16px 18px; border-left:3px solid #1a73e8; background:#fafafa; border-radius:0 8px 8px 0; page-break-inside:avoid;">
-                            <p style="font-weight:700; font-size:0.95rem; margin:0 0 12px 0; color:#202124;">
-                                <span style="background:#1a73e8; color:white; padding:2px 9px; border-radius:4px; font-size:0.8rem; margin-right:8px; font-family:monospace;">${idx + 1}</span>
-                                ${escapeHtml(texto)}
-                            </p>
-                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-left:8px;">
-                    `;
+                    html += `<div class="pdf-pregunta" style="margin-bottom:20px;padding:14px 16px;border-left:3px solid #1a73e8;background:#fafafa;border-radius:0 8px 8px 0;page-break-inside:avoid;">
+                        <p style="font-weight:700;font-size:0.93rem;margin:0 0 10px 0;color:#202124;">
+                            <span style="background:#1a73e8;color:white;padding:2px 8px;border-radius:4px;font-size:0.78rem;margin-right:8px;font-family:monospace;">${idx+1}</span>
+                            ${escapeHtml(texto)}
+                        </p>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-left:6px;">`;
 
                     opciones.forEach((op, oi) => {
                         const esCorrecta = mostrarResp && oi === correcta;
-                        html += `
-                            <div style="
-                                padding:7px 12px;
-                                border-radius:6px;
-                                font-size:0.87rem;
-                                border:1.5px solid ${esCorrecta ? '#34a853' : '#e0e0e0'};
-                                background:${esCorrecta ? '#e6f4ea' : 'white'};
-                                color:${esCorrecta ? '#1e7e34' : '#444'};
-                                font-weight:${esCorrecta ? '700' : '400'};
-                                display:flex; align-items:center; gap:8px;
-                            ">
-                                <span style="
-                                    background:${esCorrecta ? '#34a853' : '#e8f0fe'};
-                                    color:${esCorrecta ? 'white' : '#1a73e8'};
-                                    width:22px; height:22px; border-radius:50%;
-                                    display:inline-flex; align-items:center; justify-content:center;
-                                    font-size:0.75rem; font-weight:800; flex-shrink:0;
-                                ">${letrasOpc[oi]}</span>
-                                ${escapeHtml(op)}
-                                ${esCorrecta ? '<span style="margin-left:auto;">✓</span>' : ''}
-                            </div>
-                        `;
+                        html += `<div style="padding:6px 10px;border-radius:6px;font-size:0.85rem;border:1.5px solid ${esCorrecta?'#34a853':'#e0e0e0'};background:${esCorrecta?'#e6f4ea':'white'};color:${esCorrecta?'#1e7e34':'#444'};font-weight:${esCorrecta?'700':'400'};display:flex;align-items:center;gap:7px;">
+                            <span style="background:${esCorrecta?'#34a853':'#e8f0fe'};color:${esCorrecta?'white':'#1a73e8'};width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:800;flex-shrink:0;">${letrasOpc[oi]}</span>
+                            ${escapeHtml(op)}
+                            ${esCorrecta?'<span style="margin-left:auto;font-size:1rem;">✓</span>':''}
+                        </div>`;
                     });
 
                     html += `</div>`;
 
-                    // Mostrar explicación si existe y se muestran respuestas
                     if (mostrarResp && p.explicacion_correcta) {
-                        html += `
-                            <div style="margin-top:10px; padding:8px 12px; background:#e8f0fe; border-radius:6px; font-size:0.8rem; color:#1a73e8;">
-                                <strong>💡 Explicación:</strong> ${escapeHtml(p.explicacion_correcta)}
-                            </div>
-                        `;
+                        html += `<div style="margin-top:8px;padding:7px 10px;background:#e8f0fe;border-radius:6px;font-size:0.78rem;color:#1a73e8;"><strong>💡</strong> ${escapeHtml(p.explicacion_correcta)}</div>`;
                     }
-
                     html += `</div>`;
                 });
 
                 document.getElementById('pdf-content').innerHTML = html;
                 document.getElementById('pdf-preview-area').style.display = 'block';
                 document.getElementById('pdf-empty-state').style.display = 'none';
-                document.getElementById('pdf-info-label').innerText =
-                    `📄 ${preguntas.length} preguntas de "${nombreMateria}" · ${mostrarResp ? 'Con respuestas' : 'Sin respuestas (modo examen)'}`;
-
-                // Scroll al preview
-                document.getElementById('pdf-preview-area').scrollIntoView({ behavior: 'smooth' });
+                document.getElementById('pdf-info-label').innerText = `📄 ${preguntas.length} preguntas · "${nombreMateria}" · ${mostrarResp?'Con respuestas':'Sin respuestas (examen)'}`;
+                document.getElementById('pdf-preview-area').scrollIntoView({ behavior:'smooth' });
 
             } catch(e) {
                 console.error(e);
@@ -1547,20 +1582,6 @@
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-eye"></i> Previsualizar';
             }
-        };
-
-        window.changeTab = (id) => {
-            ['tab-preguntas', 'tab-excel', 'tab-users', 'tab-auditoria', 'tab-imprimir'].forEach(t => {
-                document.getElementById(t).classList.toggle('hidden', t !== id);
-            });
-            // Actualizar botones activos
-            ['btn-tab-preguntas', 'btn-tab-excel', 'btn-tab-users', 'btn-tab-auditoria', 'btn-tab-imprimir'].forEach(b => {
-                document.getElementById(b).classList.remove('active');
-            });
-            document.getElementById(`btn-tab-${id.replace('tab-', '')}`).classList.add('active');
-
-            if (id === 'tab-users') loadUsers();
-            if (id === 'tab-auditoria') cargarAuditoria();
         };
 
         document.getElementById('btn-admin-logout').onclick = () => {
