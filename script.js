@@ -22,18 +22,10 @@ const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
-// ✅ FIX MÓVIL: Procesar resultado cuando Google regresa al sitio tras redirect
-getRedirectResult(auth).then(result => {
-    // El usuario autenticado lo detecta onAuthStateChanged automáticamente
-    if (result && result.user) {
-        console.log('Redirect login exitoso:', result.user.email);
-    }
-}).catch(err => {
-    if (err && err.code !== 'auth/cancelled-popup-request' && err.code !== 'auth/null-user') {
-        console.error('Error en redirect result:', err.code, err.message);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({ icon:'error', title:'Error al iniciar sesión', html:`Código: <code>${err.code}</code><br><small>${err.message}</small>`, confirmButtonText:'Entendido' });
-        }
+// FIX MÓVIL: Manejar resultado del redirect cuando regresa de Google
+getRedirectResult(auth).catch(err => {
+    if (err && err.code !== 'auth/cancelled-popup-request') {
+        console.error('Error redirect result:', err);
     }
 });
 
@@ -239,38 +231,22 @@ onAuthStateChanged(auth, async (user) => {
 // ================================================================
 // 2. CARGAR MATERIAS
 // ================================================================
-
-// ✅ FIX JSON: Fallback hardcoded para cuando el JSON no se encuentre en GitHub Pages
-const MATERIAS_DEFAULT = [
-    { id: "comp-forense",   nombre: "Computación Forense",        activa: true },
-    { id: "deontologia",    nombre: "Deontología",                 activa: true },
-    { id: "auditoria-ti",   nombre: "Auditoría de TI",             activa: true },
-    { id: "emprendimiento", nombre: "Emprendimiento e Innovación", activa: true },
-    { id: "ia",             nombre: "Inteligencia Artificial",     activa: true },
-    { id: "practicas-1",    nombre: "Prácticas Laborales 1",       activa: true }
-];
-
 async function cargarMaterias() {
     try {
         let data = null;
-
-        // Intentar múltiples rutas — la tercera cubre subcarpetas en GitHub Pages
-        const rutasBase = [
-            'config-materias.json',
-            './config-materias.json',
-            `${location.pathname.replace(/\/[^/]*$/, '')}/config-materias.json`
-        ];
+        const rutasBase = ['config-materias.json', './config-materias.json',
+            `${location.pathname.replace(/\/[^\/]*$/, '')}/config-materias.json`];
         for (const ruta of rutasBase) {
-            try {
-                const res = await fetch(ruta);
-                if (res.ok) { data = await res.json(); break; }
-            } catch(e) { continue; }
+            try { const res = await fetch(ruta); if (res.ok) { data = await res.json(); break; } } catch(e) { continue; }
         }
-
-        // Si no se encontró el JSON, usar fallback silencioso (sin error al usuario)
-        if (!data) {
-            data = { materias: MATERIAS_DEFAULT };
-        }
+        if (!data) { data = { materias: [
+            { id: "comp-forense",   nombre: "Computación Forense",        activa: true },
+            { id: "deontologia",    nombre: "Deontología",                 activa: true },
+            { id: "auditoria-ti",   nombre: "Auditoría de TI",             activa: true },
+            { id: "emprendimiento", nombre: "Emprendimiento e Innovación", activa: true },
+            { id: "ia",             nombre: "Inteligencia Artificial",     activa: true },
+            { id: "practicas-1",    nombre: "Prácticas Laborales 1",       activa: true }
+        ] }; }
 
         let materiasVisibles = data.materias.filter(m => m.activa);
         if (currentUserEmail !== ADMIN_EMAIL) {
@@ -305,7 +281,7 @@ async function cargarMaterias() {
             else { opcionSinLimite.style.display = 'none'; cantidadContainer.style.display = 'none'; if (tiempoSelect.value === '0') tiempoSelect.value = '20'; }
         };
     } catch (error) {
-        console.error('Error inesperado en cargarMaterias:', error);
+        console.error('Error en cargarMaterias:', error);
     }
 }
 
@@ -338,101 +314,91 @@ document.getElementById('btn-start').onclick = async () => {
 
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('quiz-screen').classList.remove('hidden');
-        document.getElementById('btn-header-return').classList.remove('hidden');
-        mostrarPregunta();
-    } catch(e) {
-        Swal.fire({ icon:'error', title:'Error', text:'No se pudieron cargar las preguntas: ' + e.message });
+        document.getElementById('btn-header-return').classList.add('hidden');
+        renderQuestion();
+    } catch (error) {
+        Swal.fire({ icon:'error', title:'Error', text:'Hubo un problema al cargar las preguntas. Por favor, intenta de nuevo.' });
     }
 };
 
 // ================================================================
-// 4. MOSTRAR PREGUNTA
+// 4. RENDERIZAR PREGUNTA
 // ================================================================
-function mostrarPregunta() {
+function renderQuestion() {
     if (currentIndex >= questions.length) { finalizarExamen(); return; }
     const question = questions[currentIndex];
+    const questionText = document.getElementById('question-text');
+    const optionsContainer = document.getElementById('options-container');
+
+    registrarAcceso('ver_pregunta', { materia:currentMateria, modo:currentMode, pregunta_num:currentIndex+1, pregunta_id:question.id, pregunta_texto:(question.texto||'').substring(0,80) });
     insertarMarcaEnPregunta(currentUserEmail);
-    registrarAcceso('ver_pregunta', { materia: currentMateria, modo: currentMode, pregunta_num: currentIndex + 1, pregunta_texto: (question.texto || question.pregunta || '').substring(0, 100) });
+    questionText.textContent = `${currentIndex + 1}. ${question.texto || question.explicacion || question.pregunta || 'Pregunta sin texto'}`;
+    optionsContainer.innerHTML = '';
 
-    document.getElementById('question-text').innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <span style="background:#e8f0fe;color:#1a73e8;padding:4px 12px;border-radius:20px;font-size:0.85rem;font-weight:600;">
-                ${currentMode === 'exam' ? `Pregunta ${currentIndex + 1} de ${questions.length}` : `Pregunta ${currentIndex + 1}`}
-            </span>
-            ${currentMode === 'exam' ? `<span style="font-size:0.8rem;color:#888;">${questions.length - currentIndex - 1} restantes</span>` : ''}
-        </div>
-        ${question.texto || question.pregunta || 'Sin texto'}`;
+    const menuButton = document.createElement('button');
+    menuButton.className = 'btn-back-menu';
+    menuButton.innerHTML = '<i class="fas fa-home"></i> Volver al Menú';
+    menuButton.onclick = () => Swal.fire({ title:'¿Volver al menú?', text:currentMode==="study"?'Tu progreso se guardará automáticamente.':'Perderás el progreso de este examen.', icon:'warning', showCancelButton:true, confirmButtonColor:'#1a73e8', confirmButtonText:'Sí, volver' }).then(res => { if(res.isConfirmed) { stopTimer(); location.reload(); } });
+    optionsContainer.appendChild(menuButton);
 
-    const container = document.getElementById('options-container');
-    container.innerHTML = '';
-    const existingFeedback = document.getElementById('feedback-box');
-    if (existingFeedback) existingFeedback.remove();
+    if (!question.opciones || !Array.isArray(question.opciones)) { optionsContainer.innerHTML += '<p style="color:red;">Error: Esta pregunta no tiene opciones válidas.</p>'; return; }
 
-    const letras = ['A', 'B', 'C', 'D'];
+    const yaRespondida = selectedAnswers[currentIndex] !== null;
     question.opciones.forEach((opcion, index) => {
-        const btn = document.createElement('button');
-        btn.className = 'option-button';
-        btn.innerHTML = `<span class="option-letter">${letras[index]}</span><span>${opcion}</span>`;
-        btn.onclick = () => seleccionarRespuesta(index);
-        if (selectedAnswers[currentIndex] === index) btn.classList.add('selected');
-        container.appendChild(btn);
+        const button = document.createElement('button');
+        button.className = 'option-button';
+        button.innerHTML = `<span class="option-letter">${String.fromCharCode(65 + index)}</span> ${opcion}`;
+        if (currentMode === "study" && yaRespondida) {
+            button.disabled = true;
+            if (index === question.respuesta) button.classList.add('correct');
+            else if (index === selectedAnswers[currentIndex]) button.classList.add('incorrect');
+        } else if (selectedAnswers[currentIndex] === index) button.classList.add('selected');
+        button.onclick = () => selectAnswer(index);
+        optionsContainer.appendChild(button);
     });
 
-    const navDiv = document.createElement('div');
-    navDiv.style.cssText = 'display:flex;justify-content:space-between;margin-top:20px;gap:10px;';
+    if (currentMode === "study" && yaRespondida) optionsContainer.appendChild(crearFeedbackBox(question, selectedAnswers[currentIndex]));
 
-    if (currentMode === 'exam') {
+    const navDiv = document.createElement('div');
+    navDiv.style.cssText = 'display:flex;justify-content:space-between;margin-top:25px;gap:10px;';
+    if (currentIndex > 0) {
         const btnPrev = document.createElement('button');
         btnPrev.className = 'btn-secondary';
         btnPrev.innerHTML = '<i class="fas fa-arrow-left"></i> Anterior';
-        btnPrev.disabled = currentIndex === 0;
-        btnPrev.onclick = () => { currentIndex--; mostrarPregunta(); };
-
-        const btnNext = document.createElement('button');
-        btnNext.style.cssText = 'flex:1;';
-        if (currentIndex < questions.length - 1) {
-            btnNext.className = 'btn-primary';
-            btnNext.innerHTML = 'Siguiente <i class="fas fa-arrow-right"></i>';
-            btnNext.onclick = () => { currentIndex++; mostrarPregunta(); };
-        } else {
-            btnNext.className = 'btn-primary';
-            btnNext.style.background = '#34a853';
-            btnNext.innerHTML = '<i class="fas fa-check"></i> Finalizar Examen';
-            btnNext.onclick = () => {
-                Swal.fire({ title:'¿Finalizar examen?', text:'No podrás cambiar tus respuestas.', icon:'question', showCancelButton:true, confirmButtonColor:'#34a853', confirmButtonText:'Sí, finalizar' })
-                .then(r => { if(r.isConfirmed) finalizarExamen(); });
-            };
-        }
+        btnPrev.onclick = () => { currentIndex--; renderQuestion(); guardarAvanceAutomatico(); };
         navDiv.appendChild(btnPrev);
-        navDiv.appendChild(btnNext);
     }
-    container.appendChild(navDiv);
+    const btnNext = document.createElement('button');
+    btnNext.className = 'btn-primary';
+    btnNext.style.cssText = 'margin-left:auto;';
+    if (currentIndex === questions.length - 1) { btnNext.textContent = 'Finalizar'; btnNext.onclick = finalizarExamen; }
+    else {
+        btnNext.innerHTML = 'Siguiente <i class="fas fa-arrow-right"></i>';
+        btnNext.onclick = () => {
+            if (selectedAnswers[currentIndex] === null && currentMode === "exam") {
+                Swal.fire({ icon:'warning', title:'Pregunta sin responder', text:'¿Deseas continuar sin responder?', showCancelButton:true, confirmButtonText:'Sí, continuar' }).then(r => { if(r.isConfirmed) { currentIndex++; renderQuestion(); guardarAvanceAutomatico(); } });
+            } else { currentIndex++; renderQuestion(); guardarAvanceAutomatico(); }
+        };
+    }
+    navDiv.appendChild(btnNext);
+    optionsContainer.appendChild(navDiv);
 }
 
 // ================================================================
 // 5. SELECCIONAR RESPUESTA
 // ================================================================
-function seleccionarRespuesta(optionIndex) {
+function selectAnswer(optionIndex) {
     const buttons = document.querySelectorAll('.option-button');
-    const question = questions[currentIndex];
-
-    if (currentMode === 'study') {
-        buttons.forEach(btn => btn.disabled = true);
-        const correct = question.respuesta;
-        buttons[optionIndex].classList.add(optionIndex === correct ? 'correct' : 'incorrect');
-        if (optionIndex !== correct) buttons[correct].classList.add('correct');
+    if (currentMode === "study") {
+        const question = questions[currentIndex];
+        buttons.forEach((btn, idx) => { btn.disabled = true; if (idx === question.respuesta) btn.classList.add('correct'); else if (idx === optionIndex) btn.classList.add('incorrect'); });
         selectedAnswers[currentIndex] = optionIndex;
-        guardarAvanceAutomatico();
-
+        const optionsContainer = document.getElementById('options-container');
+        const existingFeedback = document.getElementById('feedback-box');
+        if (existingFeedback) existingFeedback.remove();
         const fb = crearFeedbackBox(question, optionIndex);
-        document.getElementById('options-container').appendChild(fb);
-
-        const btnNext = document.createElement('button');
-        btnNext.className = 'btn-primary full-width';
-        btnNext.style.marginTop = '15px';
-        btnNext.innerHTML = currentIndex < questions.length - 1 ? 'Siguiente Pregunta <i class="fas fa-arrow-right"></i>' : '<i class="fas fa-check"></i> Ver Resultados';
-        btnNext.onclick = () => { currentIndex++; mostrarPregunta(); };
-        document.getElementById('options-container').appendChild(btnNext);
+        const navButtons = optionsContainer.querySelector('div[style*="justify-content"]');
+        if (navButtons) optionsContainer.insertBefore(fb, navButtons); else optionsContainer.appendChild(fb);
     } else {
         buttons.forEach(btn => btn.classList.remove('selected'));
         buttons[optionIndex].classList.add('selected');
@@ -542,7 +508,7 @@ document.getElementById('btn-header-return').onclick = () => {
     .then(res => { if(res.isConfirmed) { stopTimer(); location.reload(); } });
 };
 
-// ✅ FIX MÓVIL: Detectar dispositivo y usar método correcto
+// FIX MÓVIL: Detectar dispositivo y usar método correcto
 function esMobil() {
     return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
 }
