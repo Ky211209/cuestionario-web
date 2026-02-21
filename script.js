@@ -1,114 +1,12 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-function getDeviceId() {
-    let id = localStorage.getItem('device_id');
-    if (!id) {
-        id = 'dev_' + Math.random().toString(36).substr(2, 12) + '_' + Date.now();
-        localStorage.setItem('device_id', id);
-    }
-    return id;
-}
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-auth.useDeviceLanguage();
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
-provider.setCustomParameters({ prompt: 'select_account' });
-
-// ================================================================
-// CONTROL DE ESTADO DE CARGA - Evita parpadeo en la pantalla de auth
-// durante la redirección de Google
-// ================================================================
-let redirectResultResuelto = false;
-
-// Mostrar pantalla de carga mientras se espera el resultado del redirect
-function mostrarPantallaCarga() {
-    const authScreen = document.getElementById('auth-screen');
-    authScreen.innerHTML = `
-        <div style="text-align:center; padding: 20px;">
-            <div style="font-size:2rem; margin-bottom:15px;">⏳</div>
-            <p style="color:#1a73e8; font-weight:600;">Verificando sesión...</p>
-            <p style="color:#888; font-size:0.85rem; margin-top:8px;">Por favor espera</p>
-        </div>
-    `;
-    authScreen.classList.remove('hidden');
-}
-
-function restaurarPantallaLogin() {
-    const authScreen = document.getElementById('auth-screen');
-    authScreen.innerHTML = `
-        <h2>Bienvenido</h2>
-        <button id="btn-login" class="btn-primary" style="margin-top: 20px;">Acceder con Google</button>
-    `;
-    // Re-asignar el evento al nuevo botón
-    document.getElementById('btn-login').onclick = () => {
-        const btn = document.getElementById('btn-login');
-        btn.textContent = 'Redirigiendo...';
-        btn.disabled = true;
-        signInWithRedirect(auth, provider).catch(err => {
-            console.error('Error al redirigir:', err);
-            btn.textContent = 'Acceder con Google';
-            btn.disabled = false;
-            Swal.fire({ 
-                icon: 'error', 
-                title: 'Error al iniciar sesión',
-                html: `Código: <code>${err.code}</code><br><small>${err.message}</small>`,
-                confirmButtonText: 'Entendido'
-            });
-        });
-    };
-}
-
-// Mostrar carga inmediatamente (antes de que getRedirectResult resuelva)
-mostrarPantallaCarga();
-
-// Timeout de seguridad: si getRedirectResult tarda más de 4 segundos,
-// forzar restauración del login para que no quede pegado
-const timeoutSeguridad = setTimeout(() => {
-    if (!redirectResultResuelto) {
-        console.warn('getRedirectResult tardó demasiado — forzando pantalla de login');
-        redirectResultResuelto = true;
-        restaurarPantallaLogin();
-    }
-}, 4000);
-
-// Capturar resultado del redirect de Google al volver a la página
-getRedirectResult(auth).then((result) => {
-    clearTimeout(timeoutSeguridad);
-    if (result && result.user) {
-        console.log('Redirect login exitoso:', result.user.email);
-        // onAuthStateChanged se encarga del flujo
-    }
-    redirectResultResuelto = true;
-}).catch((error) => {
-    clearTimeout(timeoutSeguridad);
-    redirectResultResuelto = true;
-    console.error('Error en redirect:', error.code, error.message);
-    if (error.code === 'auth/unauthorized-domain') {
-        restaurarPantallaLogin();
-        Swal.fire({
-            icon: 'error',
-            title: 'Dominio no autorizado',
-            html: `El dominio no está autorizado en Firebase.<br><small style="color:#999">${error.code}</small>`,
-            confirmButtonText: 'Entendido'
-        });
-    } else if (error.code && error.code !== 'auth/no-current-user' && error.code !== 'auth/null-user') {
-        restaurarPantallaLogin();
-        Swal.fire({
-            icon: 'error',
-            title: 'Error al iniciar sesión',
-            html: `No se pudo completar el inicio de sesión.<br><small style="color:#999">${error.code}: ${error.message}</small>`,
-            confirmButtonText: 'Entendido'
-        });
-    } else {
-        // Sin error real, simplemente restaurar login
-        restaurarPantallaLogin();
-    }
-});
 
 // ================================================================
 // MÓDULO DE SEGURIDAD
@@ -176,159 +74,49 @@ async function registrarAcceso(tipo, detalle = {}) {
     }
 }
 
-// --- 3. OVERLAY BLOQUEADOR + DETECCIÓN DE PANTALLA COMPARTIDA ---
+// --- 3. OCULTAR CONTENIDO AL PERDER FOCO ---
 let overlayOcultar = null;
-let screenShareStream = null;       // stream activo de captura de pantalla
-let screenShareBloqueado = false;   // true = bloqueado por screen share
-let esAdminActivo = false;          // se actualiza al autenticar
-
-function esAdmin() {
-    return currentUserEmail === ADMIN_EMAIL;
-}
 
 function crearOverlay() {
     if (overlayOcultar) return;
     overlayOcultar = document.createElement('div');
     overlayOcultar.id = 'security-overlay';
-    // El contenido se actualiza dinámicamente según el motivo
-    overlayOcultar.style.cssText = `
-        display: none;
-        position: fixed;
-        top: 0; left: 0;
-        width: 100%; height: 100%;
-        background: #000;
-        z-index: 99999;
-        justify-content: center;
-        align-items: center;
-        flex-direction: column;
-        text-align: center;
-    `;
+    overlayOcultar.innerHTML = `
+        <div class="overlay-content">
+            <i class="fas fa-shield-alt" style="font-size: 2.5rem; color: #1a73e8; margin-bottom: 15px;"></i>
+            <p style="font-weight:bold; font-size:1.1rem;">Contenido Protegido</p>
+            <p style="color:#666; font-size:0.9rem; margin-top:8px;">Vuelve a esta pestaña para continuar.</p>
+        </div>`;
     document.body.appendChild(overlayOcultar);
 }
 
-function mostrarOverlayBloqueador(motivo, esCompartirPantalla = false) {
-    if (!overlayOcultar) return;
-
+function mostrarOverlay(motivo) {
+    if (!overlayOcultar || contentHidden) return;
     const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
-    if (!quizVisible) return;
-
+    if (!quizVisible) return; // Solo aplica durante el examen/estudio
     contentHidden = true;
-
-    const icono = esCompartirPantalla ? '🔴' : '🛡️';
-    const titulo = esCompartirPantalla
-        ? 'COMPARTIR PANTALLA BLOQUEADO'
-        : 'CONTENIDO PROTEGIDO';
-    const mensaje = esCompartirPantalla
-        ? 'Has intentado compartir esta pantalla.<br>Las preguntas están ocultas hasta que<br><strong>cierres la transmisión.</strong>'
-        : 'Vuelve a esta pestaña para continuar.';
-    const colorTitulo = esCompartirPantalla ? '#ff4444' : '#ffffff';
-
-    overlayOcultar.innerHTML = `
-        <div style="max-width: 480px; padding: 40px;">
-            <div style="font-size: 4rem; margin-bottom: 20px;">${icono}</div>
-            <p style="color: ${colorTitulo}; font-size: 1.8rem; font-weight: 900; letter-spacing: 0.05em; margin-bottom: 16px;">
-                ${titulo}
-            </p>
-            <p style="color: #aaa; font-size: 1rem; line-height: 1.7; margin-bottom: 28px;">
-                ${mensaje}
-            </p>
-            <div style="
-                background: rgba(255,255,255,0.07);
-                border: 1px solid rgba(255,255,255,0.15);
-                border-radius: 12px;
-                padding: 16px 24px;
-                display: inline-block;
-            ">
-                <p style="color: #fff; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; opacity: 0.6;">
-                    Sesión identificada como
-                </p>
-                <p style="color: #facc15; font-size: 1.1rem; font-weight: 700; margin: 0;">
-                    ${currentUserName}
-                </p>
-                <p style="color: #aaa; font-size: 0.85rem; margin: 4px 0 0 0;">
-                    ${currentUserEmail}
-                </p>
-            </div>
-            ${esCompartirPantalla ? '' : `
-            <p style="color: #555; font-size: 0.8rem; margin-top: 28px;">
-                Este evento ha sido registrado
-            </p>`}
-        </div>
-    `;
-
     overlayOcultar.style.display = 'flex';
-    registrarAcceso(esCompartirPantalla ? 'intento_compartir_pantalla' : 'perder_foco', { motivo });
+    registrarAcceso('perder_foco', { motivo });
 }
 
 function ocultarOverlay() {
     if (!overlayOcultar) return;
-    if (screenShareBloqueado) return; // No se puede cerrar si sigue compartiendo
     contentHidden = false;
     overlayOcultar.style.display = 'none';
 }
 
-// ── DETECCIÓN DE SCREEN SHARE (Screen Capture API) ──────────────────────────
-// Interceptamos getDisplayMedia para saber si el usuario inicia una captura
-const _originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
-
-navigator.mediaDevices.getDisplayMedia = async function(constraints) {
-    const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
-    if (!quizVisible) {
-        // Fuera del quiz, permitir normal
-        return _originalGetDisplayMedia(constraints);
-    }
-
-    // Usuario normal intentando compartir durante el quiz → interceptar
-    try {
-        screenShareStream = await _originalGetDisplayMedia(constraints);
-
-        // Compartición activa → bloquear inmediatamente
-        screenShareBloqueado = true;
-        mostrarOverlayBloqueador('screen_share_detectado', true);
-
-        // Monitorear cuándo se detiene la transmisión
-        screenShareStream.getVideoTracks().forEach(track => {
-            track.addEventListener('ended', () => {
-                // El usuario cerró el Meet o dejó de compartir
-                screenShareBloqueado = false;
-                screenShareStream = null;
-                contentHidden = false;
-                overlayOcultar.style.display = 'none';
-                registrarAcceso('pantalla_compartida_detenida');
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Transmisión cerrada',
-                    text: 'Puedes continuar con el simulador.',
-                    timer: 3000,
-                    showConfirmButton: false,
-                    toast: true,
-                    position: 'top-end'
-                });
-            });
-        });
-
-        return screenShareStream;
-    } catch (err) {
-        // Usuario canceló el diálogo de compartir → no bloquear
-        throw err;
-    }
-};
-
-// ── EVENTOS DE FOCO / PESTAÑA ────────────────────────────────────────────────
+// Evento: cambio de visibilidad de pestaña
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-        mostrarOverlayBloqueador('cambio_pestaña', false);
+        mostrarOverlay('cambio_pestaña');
     } else {
         ocultarOverlay();
     }
 });
 
-window.addEventListener('blur', () => {
-    mostrarOverlayBloqueador('ventana_minimizada', false);
-});
-window.addEventListener('focus', () => {
-    ocultarOverlay();
-});
+// Evento: ventana pierde foco (Alt+Tab, minimizar)
+window.addEventListener('blur', () => mostrarOverlay('ventana_minimizada'));
+window.addEventListener('focus', () => ocultarOverlay());
 
 // --- 4. INTERCEPTAR CLIC DERECHO E INSPECCIONAR (disuasivo) ---
 document.addEventListener('contextmenu', (e) => {
@@ -387,35 +175,23 @@ let tiempoLimiteSegundos = 0;   // 0 = sin límite
 let tiempoRestante = 0;         // para cuenta regresiva
 
 // 1. MANEJO DE SESIÓN PERMANENTE
-// Esta bandera evita que si onAuthStateChanged se dispara varias veces
-// (lo que Firebase hace normalmente al refrescar tokens), el flujo de
-// verificación de dispositivos se ejecute más de una vez por sesión.
-let sesionInicializada = false;
-
 onAuthStateChanged(auth, async (user) => {
+    // IMPORTANTE: Asegurar que el enlace admin esté oculto por defecto
     const adminLinkContainer = document.getElementById('admin-link-container');
-
-    // Si no hay usuario y el redirect aún no resolvió, esperamos
-    // para evitar parpadeo en la pantalla de bienvenido
-    if (!user && !redirectResultResuelto) return;
-
+    
     if (user) {
-        // Si la sesión ya fue inicializada en esta carga de página, no repetir
-        // (Firebase puede disparar onAuthStateChanged varias veces al refrescar token)
-        if (sesionInicializada) return;
-        sesionInicializada = true;
-
         const userEmail = user.email.toLowerCase();
-        const displayName = user.displayName || userEmail;
-        const esAdminUser = userEmail === ADMIN_EMAIL;
-
-        // Verificar acceso en Firebase
-        let userData = null;
-        if (!esAdminUser) {
+        console.log('Usuario autenticado:', userEmail);
+        
+        // Verificar si el usuario tiene acceso permitido
+        const tieneAcceso = USUARIOS_PERMITIDOS.includes(userEmail);
+        
+        if (!tieneAcceso) {
+            // Verificar en Firebase si está autorizado
             try {
                 const userDoc = await getDoc(doc(db, "usuarios_seguros", userEmail));
                 if (!userDoc.exists()) {
-                    sesionInicializada = false; // Permitir retry si fue error transitorio
+                    // Usuario no autorizado
                     await Swal.fire({
                         icon: 'error',
                         title: 'Acceso Denegado',
@@ -425,98 +201,40 @@ onAuthStateChanged(auth, async (user) => {
                     signOut(auth);
                     return;
                 }
-                userData = userDoc.data();
             } catch (error) {
-                sesionInicializada = false;
                 console.error('Error verificando usuario:', error);
-                // Si es error de red/permisos, no expulsar al usuario — mostrar retry
-                const resultado = await Swal.fire({
-                    icon: 'warning',
-                    title: 'Error de conexión',
-                    text: 'No se pudo verificar tu acceso. ¿Deseas intentar de nuevo?',
-                    confirmButtonText: 'Reintentar',
-                    cancelButtonText: 'Cerrar sesión',
-                    showCancelButton: true,
-                    confirmButtonColor: '#1a73e8'
-                });
-                if (resultado.isConfirmed) {
-                    location.reload(); // Recargar para reintentar todo el flujo
-                } else {
-                    signOut(auth);
-                }
-                return;
             }
         }
-
-        // Validar límite de dispositivos (solo si es usuario normal y tenemos sus datos)
-        if (!esAdminUser && userData) {
-            const maxDispositivos = userData.max_dispositivos || 2;
-            const dispositivosActivos = userData.dispositivos || {};
-            const deviceId = getDeviceId();
-
-            if (!dispositivosActivos[deviceId]) {
-                // Este dispositivo no está registrado aún
-                const cantidadActual = Object.keys(dispositivosActivos).length;
-                if (cantidadActual >= maxDispositivos) {
-                    sesionInicializada = false;
-                    await Swal.fire({
-                        icon: 'error',
-                        title: 'Límite de dispositivos alcanzado',
-                        html: `Tu cuenta permite acceder desde <strong>${maxDispositivos}</strong> dispositivo(s).<br>
-                               Ya tienes <strong>${cantidadActual}</strong> registrado(s).<br><br>
-                               Contacta al administrador para restablecer tus dispositivos.`,
-                        confirmButtonText: 'Entendido',
-                        confirmButtonColor: '#ea4335'
-                    });
-                    signOut(auth);
-                    return;
-                }
-                // Registrar este nuevo dispositivo
-                const nuevosDisp = { ...dispositivosActivos };
-                nuevosDisp[deviceId] = {
-                    registrado: new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }),
-                    userAgent: navigator.userAgent.substring(0, 100)
-                };
-                try {
-                    await updateDoc(doc(db, "usuarios_seguros", userEmail), {
-                        dispositivos: nuevosDisp
-                    });
-                    console.log('✅ Nuevo dispositivo registrado:', deviceId);
-                } catch(e) {
-                    // No bloquear el acceso si falla el registro del dispositivo
-                    console.warn('No se pudo registrar dispositivo (acceso permitido de todas formas):', e);
-                }
-            } else {
-                console.log('✅ Dispositivo ya registrado:', deviceId);
-            }
-        }
-
-        // Inicializar sesión
+        
+        // Inicializar módulo de seguridad
         currentUserEmail = userEmail;
-        currentUserName = displayName;
+        currentUserName = user.displayName || userEmail;
         crearMarcaDeAgua(userEmail);
         crearOverlay();
         registrarAcceso('inicio_sesion');
 
-        const maxDisp = userData?.max_dispositivos || 2;
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('setup-screen').classList.remove('hidden');
         document.getElementById('user-display').classList.remove('hidden');
-        document.getElementById('user-info').innerText = `${displayName.toUpperCase()} (${maxDisp} Disp.)`;
-
-        if (esAdminUser) {
+        document.getElementById('user-info').innerText = `${user.displayName.toUpperCase()} (2 Disp.)`;
+        
+        // Mostrar enlace de panel admin SOLO si es la administradora
+        const esAdmin = userEmail === ADMIN_EMAIL;
+        console.log('¿Es administradora?', esAdmin, '(Email admin esperado:', ADMIN_EMAIL + ')');
+        
+        if (esAdmin) {
+            console.log('Mostrando enlace del panel admin');
             adminLinkContainer.classList.remove('hidden');
             adminLinkContainer.style.display = 'block';
         } else {
+            console.log('Ocultando enlace del panel admin');
             adminLinkContainer.classList.add('hidden');
             adminLinkContainer.style.display = 'none';
         }
-
+        
         cargarMaterias();
-
     } else {
-        sesionInicializada = false;
-        restaurarPantallaLogin();
+        console.log('Usuario no autenticado');
         document.getElementById('auth-screen').classList.remove('hidden');
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('user-display').classList.add('hidden');
@@ -1199,4 +917,4 @@ document.getElementById('btn-header-return').onclick = () => {
     });
 };
 
-// Nota: el evento de btn-login se asigna dinámicamente en restaurarPantallaLogin()
+document.getElementById('btn-login').onclick = () => signInWithPopup(auth, provider);
