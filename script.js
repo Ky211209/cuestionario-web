@@ -66,14 +66,26 @@ function restaurarPantallaLogin() {
 // Mostrar carga inmediatamente (antes de que getRedirectResult resuelva)
 mostrarPantallaCarga();
 
+// Timeout de seguridad: si getRedirectResult tarda más de 4 segundos,
+// forzar restauración del login para que no quede pegado
+const timeoutSeguridad = setTimeout(() => {
+    if (!redirectResultResuelto) {
+        console.warn('getRedirectResult tardó demasiado — forzando pantalla de login');
+        redirectResultResuelto = true;
+        restaurarPantallaLogin();
+    }
+}, 4000);
+
 // Capturar resultado del redirect de Google al volver a la página
 getRedirectResult(auth).then((result) => {
+    clearTimeout(timeoutSeguridad);
     if (result && result.user) {
         console.log('Redirect login exitoso:', result.user.email);
         // onAuthStateChanged se encarga del flujo
     }
     redirectResultResuelto = true;
 }).catch((error) => {
+    clearTimeout(timeoutSeguridad);
     redirectResultResuelto = true;
     console.error('Error en redirect:', error.code, error.message);
     if (error.code === 'auth/unauthorized-domain') {
