@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ================================================================
@@ -21,6 +21,14 @@ auth.useDeviceLanguage();
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
+
+// Manejar resultado del redirect (cuando vuelve desde Google en móvil)
+getRedirectResult(auth).catch(err => {
+    if (err && err.code !== 'auth/cancelled-popup-request') {
+        console.error('Error redirect result:', err);
+        Swal.fire({ icon:'error', title:'Error al iniciar sesión', html:`Código: <code>${err.code}</code><br><small>${err.message}</small>`, confirmButtonText:'Entendido' });
+    }
+});
 
 // ================================================================
 // MÓDULO DE SEGURIDAD
@@ -224,39 +232,13 @@ onAuthStateChanged(auth, async (user) => {
 // ================================================================
 // 2. CARGAR MATERIAS
 // ================================================================
-
-// Materias por defecto (fallback si el JSON no carga)
-const MATERIAS_DEFAULT = [
-    { id: "comp-forense",   nombre: "Computación Forense",        activa: true },
-    { id: "deontologia",    nombre: "Deontología",                 activa: true },
-    { id: "auditoria-ti",   nombre: "Auditoría de TI",             activa: true },
-    { id: "emprendimiento", nombre: "Emprendimiento e Innovación", activa: true },
-    { id: "ia",             nombre: "Inteligencia Artificial",     activa: true },
-    { id: "practicas-1",    nombre: "Prácticas Laborales 1",       activa: true }
-];
-
 async function cargarMaterias() {
     try {
         let data = null;
-
-        // Intentar cargar el JSON con rutas relativas al script
-        const rutasBase = [
-            'config-materias.json',
-            './config-materias.json',
-            // Ruta relativa al subfolder del repositorio en GitHub Pages
-            `${location.pathname.replace(/\/[^/]*$/, '')}/config-materias.json`
-        ];
-        for (const ruta of rutasBase) {
-            try {
-                const res = await fetch(ruta);
-                if (res.ok) { data = await res.json(); break; }
-            } catch(e) { continue; }
+        for (const ruta of ['config-materias.json', './config-materias.json', '/config-materias.json']) {
+            try { const res = await fetch(ruta); if (res.ok) { data = await res.json(); break; } } catch(e) { continue; }
         }
-
-        // Si no se pudo cargar el JSON, usar el fallback sin lanzar error
-        if (!data) {
-            data = { materias: MATERIAS_DEFAULT };
-        }
+        if (!data) throw new Error('No se encontró config-materias.json');
 
         let materiasVisibles = data.materias.filter(m => m.activa);
         if (currentUserEmail !== ADMIN_EMAIL) {
@@ -518,17 +500,34 @@ document.getElementById('btn-header-return').onclick = () => {
     .then(res => { if(res.isConfirmed) { stopTimer(); location.reload(); } });
 };
 
-// Login con Popup — más confiable que Redirect en GitHub Pages y móviles
+// Detectar si es móvil/tablet
+function esMobil() {
+    return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
+}
+
+// Login con Popup (desktop) o Redirect (móvil)
 document.getElementById('btn-login').onclick = () => {
     const btn = document.getElementById('btn-login');
     btn.textContent = 'Conectando...';
     btn.disabled = true;
-    signInWithPopup(auth, provider).catch(err => {
-        console.error('Error al iniciar sesión:', err);
-        btn.textContent = 'Acceder con Google';
-        btn.disabled = false;
-        if (err.code !== 'auth/popup-closed-by-user') {
+
+    if (esMobil()) {
+        // En móvil usar redirect — más confiable que popup
+        signInWithRedirect(auth, provider).catch(err => {
+            console.error('Error redirect:', err);
+            btn.textContent = 'Acceder con Google';
+            btn.disabled = false;
             Swal.fire({ icon:'error', title:'Error al iniciar sesión', html:`Código: <code>${err.code}</code><br><small>${err.message}</small>`, confirmButtonText:'Entendido' });
-        }
-    });
+        });
+    } else {
+        // En desktop usar popup
+        signInWithPopup(auth, provider).catch(err => {
+            console.error('Error al iniciar sesión:', err);
+            btn.textContent = 'Acceder con Google';
+            btn.disabled = false;
+            if (err.code !== 'auth/popup-closed-by-user') {
+                Swal.fire({ icon:'error', title:'Error al iniciar sesión', html:`Código: <code>${err.code}</code><br><small>${err.message}</small>`, confirmButtonText:'Entendido' });
+            }
+        });
+    }
 };
