@@ -311,13 +311,23 @@ onAuthStateChanged(auth, async (user) => {
                     signOut(auth);
                     return;
                 }
+                // Usuario encontrado en Firebase → continuar normalmente
             } catch (error) {
-                console.error('Error verificando usuario:', error);
+                console.error('Error verificando usuario en Firebase:', error);
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Error de conexión',
+                    text: 'No se pudo verificar tu acceso. Revisa tu conexión e intenta de nuevo.',
+                    confirmButtonText: 'Entendido'
+                });
+                signOut(auth);
+                return;
             }
         }
         
         // Inicializar módulo de seguridad
         currentUserEmail = userEmail;
+        // Protección contra displayName nulo (algunas cuentas Google no lo tienen)
         currentUserName = user.displayName || userEmail;
         crearMarcaDeAgua(userEmail);
         crearOverlay();
@@ -326,7 +336,8 @@ onAuthStateChanged(auth, async (user) => {
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('setup-screen').classList.remove('hidden');
         document.getElementById('user-display').classList.remove('hidden');
-        document.getElementById('user-info').innerText = `${user.displayName.toUpperCase()} (2 Disp.)`;
+        // Fix: user.displayName puede ser null → usar currentUserName que ya tiene fallback
+        document.getElementById('user-info').innerText = `${currentUserName.toUpperCase()} (2 Disp.)`;
         
         // Mostrar enlace de panel admin SOLO si es la administradora
         const esAdmin = userEmail === ADMIN_EMAIL;
