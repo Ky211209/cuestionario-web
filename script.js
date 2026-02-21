@@ -224,13 +224,39 @@ onAuthStateChanged(auth, async (user) => {
 // ================================================================
 // 2. CARGAR MATERIAS
 // ================================================================
+
+// Materias por defecto (fallback si el JSON no carga)
+const MATERIAS_DEFAULT = [
+    { id: "comp-forense",   nombre: "Computación Forense",        activa: true },
+    { id: "deontologia",    nombre: "Deontología",                 activa: true },
+    { id: "auditoria-ti",   nombre: "Auditoría de TI",             activa: true },
+    { id: "emprendimiento", nombre: "Emprendimiento e Innovación", activa: true },
+    { id: "ia",             nombre: "Inteligencia Artificial",     activa: true },
+    { id: "practicas-1",    nombre: "Prácticas Laborales 1",       activa: true }
+];
+
 async function cargarMaterias() {
     try {
         let data = null;
-        for (const ruta of ['config-materias.json', './config-materias.json', '/config-materias.json']) {
-            try { const res = await fetch(ruta); if (res.ok) { data = await res.json(); break; } } catch(e) { continue; }
+
+        // Intentar cargar el JSON con rutas relativas al script
+        const rutasBase = [
+            'config-materias.json',
+            './config-materias.json',
+            // Ruta relativa al subfolder del repositorio en GitHub Pages
+            `${location.pathname.replace(/\/[^/]*$/, '')}/config-materias.json`
+        ];
+        for (const ruta of rutasBase) {
+            try {
+                const res = await fetch(ruta);
+                if (res.ok) { data = await res.json(); break; }
+            } catch(e) { continue; }
         }
-        if (!data) throw new Error('No se encontró config-materias.json');
+
+        // Si no se pudo cargar el JSON, usar el fallback sin lanzar error
+        if (!data) {
+            data = { materias: MATERIAS_DEFAULT };
+        }
 
         let materiasVisibles = data.materias.filter(m => m.activa);
         if (currentUserEmail !== ADMIN_EMAIL) {
