@@ -16,7 +16,7 @@ body {
 /* CABECERA FIJA */
 header {
     width: 100%;
-    padding: 10px 30px;
+    padding: 10px 20px;
     background: #ffffff;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     position: fixed;
@@ -26,11 +26,52 @@ header {
     align-items: center;
     justify-content: space-between;
     z-index: 1000;
+    min-height: 60px;
 }
 
-.logo { display: flex; align-items: center; gap: 10px; }
+.logo { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .logo h1 { font-size: 1.15rem; color: #1a73e8; font-weight: 700; }
 .subtitle { color: #888; font-size: 0.8rem; font-weight: 400; }
+
+/* USER DISPLAY EN HEADER */
+#user-display {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+#user-info {
+    font-weight: 700;
+    color: #1a73e8;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+}
+
+/* MÓVIL */
+@media (max-width: 500px) {
+    body { padding-top: 70px; }
+
+    header { padding: 8px 12px; }
+
+    .logo h1 { font-size: 0.95rem; }
+    .subtitle { display: none; }
+
+    #user-info {
+        display: none; /* En móvil el nombre se oculta del header — se ve en setup-screen */
+    }
+
+    #btn-header-return span { display: none; } /* Solo icono en móvil */
+    #btn-header-return { padding: 7px 10px; }
+
+    #btn-logout {
+        padding: 6px 10px;
+        font-size: 0.78rem;
+    }
+}
 
 /* CONTENEDORES */
 .container {
