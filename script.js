@@ -74,49 +74,159 @@ async function registrarAcceso(tipo, detalle = {}) {
     }
 }
 
-// --- 3. OCULTAR CONTENIDO AL PERDER FOCO ---
+// --- 3. OVERLAY BLOQUEADOR + DETECCIÓN DE PANTALLA COMPARTIDA ---
 let overlayOcultar = null;
+let screenShareStream = null;       // stream activo de captura de pantalla
+let screenShareBloqueado = false;   // true = bloqueado por screen share
+let esAdminActivo = false;          // se actualiza al autenticar
+
+function esAdmin() {
+    return currentUserEmail === ADMIN_EMAIL;
+}
 
 function crearOverlay() {
     if (overlayOcultar) return;
     overlayOcultar = document.createElement('div');
     overlayOcultar.id = 'security-overlay';
-    overlayOcultar.innerHTML = `
-        <div class="overlay-content">
-            <i class="fas fa-shield-alt" style="font-size: 2.5rem; color: #1a73e8; margin-bottom: 15px;"></i>
-            <p style="font-weight:bold; font-size:1.1rem;">Contenido Protegido</p>
-            <p style="color:#666; font-size:0.9rem; margin-top:8px;">Vuelve a esta pestaña para continuar.</p>
-        </div>`;
+    // El contenido se actualiza dinámicamente según el motivo
+    overlayOcultar.style.cssText = `
+        display: none;
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: #000;
+        z-index: 99999;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        text-align: center;
+    `;
     document.body.appendChild(overlayOcultar);
 }
 
-function mostrarOverlay(motivo) {
-    if (!overlayOcultar || contentHidden) return;
+function mostrarOverlayBloqueador(motivo, esCompartirPantalla = false) {
+    if (!overlayOcultar) return;
+
     const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
-    if (!quizVisible) return; // Solo aplica durante el examen/estudio
+    if (!quizVisible) return;
+
     contentHidden = true;
+
+    const icono = esCompartirPantalla ? '🔴' : '🛡️';
+    const titulo = esCompartirPantalla
+        ? 'COMPARTIR PANTALLA BLOQUEADO'
+        : 'CONTENIDO PROTEGIDO';
+    const mensaje = esCompartirPantalla
+        ? 'Has intentado compartir esta pantalla.<br>Las preguntas están ocultas hasta que<br><strong>cierres la transmisión.</strong>'
+        : 'Vuelve a esta pestaña para continuar.';
+    const colorTitulo = esCompartirPantalla ? '#ff4444' : '#ffffff';
+
+    overlayOcultar.innerHTML = `
+        <div style="max-width: 480px; padding: 40px;">
+            <div style="font-size: 4rem; margin-bottom: 20px;">${icono}</div>
+            <p style="color: ${colorTitulo}; font-size: 1.8rem; font-weight: 900; letter-spacing: 0.05em; margin-bottom: 16px;">
+                ${titulo}
+            </p>
+            <p style="color: #aaa; font-size: 1rem; line-height: 1.7; margin-bottom: 28px;">
+                ${mensaje}
+            </p>
+            <div style="
+                background: rgba(255,255,255,0.07);
+                border: 1px solid rgba(255,255,255,0.15);
+                border-radius: 12px;
+                padding: 16px 24px;
+                display: inline-block;
+            ">
+                <p style="color: #fff; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; opacity: 0.6;">
+                    Sesión identificada como
+                </p>
+                <p style="color: #facc15; font-size: 1.1rem; font-weight: 700; margin: 0;">
+                    ${currentUserName}
+                </p>
+                <p style="color: #aaa; font-size: 0.85rem; margin: 4px 0 0 0;">
+                    ${currentUserEmail}
+                </p>
+            </div>
+            ${esCompartirPantalla ? '' : `
+            <p style="color: #555; font-size: 0.8rem; margin-top: 28px;">
+                Este evento ha sido registrado
+            </p>`}
+        </div>
+    `;
+
     overlayOcultar.style.display = 'flex';
-    registrarAcceso('perder_foco', { motivo });
+    registrarAcceso(esCompartirPantalla ? 'intento_compartir_pantalla' : 'perder_foco', { motivo });
 }
 
 function ocultarOverlay() {
     if (!overlayOcultar) return;
+    if (screenShareBloqueado) return; // No se puede cerrar si sigue compartiendo
     contentHidden = false;
     overlayOcultar.style.display = 'none';
 }
 
-// Evento: cambio de visibilidad de pestaña
+// ── DETECCIÓN DE SCREEN SHARE (Screen Capture API) ──────────────────────────
+// Interceptamos getDisplayMedia para saber si el usuario inicia una captura
+const _originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+
+navigator.mediaDevices.getDisplayMedia = async function(constraints) {
+    const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
+    if (!quizVisible) {
+        // Fuera del quiz, permitir normal
+        return _originalGetDisplayMedia(constraints);
+    }
+
+    // Usuario normal intentando compartir durante el quiz → interceptar
+    try {
+        screenShareStream = await _originalGetDisplayMedia(constraints);
+
+        // Compartición activa → bloquear inmediatamente
+        screenShareBloqueado = true;
+        mostrarOverlayBloqueador('screen_share_detectado', true);
+
+        // Monitorear cuándo se detiene la transmisión
+        screenShareStream.getVideoTracks().forEach(track => {
+            track.addEventListener('ended', () => {
+                // El usuario cerró el Meet o dejó de compartir
+                screenShareBloqueado = false;
+                screenShareStream = null;
+                contentHidden = false;
+                overlayOcultar.style.display = 'none';
+                registrarAcceso('pantalla_compartida_detenida');
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Transmisión cerrada',
+                    text: 'Puedes continuar con el simulador.',
+                    timer: 3000,
+                    showConfirmButton: false,
+                    toast: true,
+                    position: 'top-end'
+                });
+            });
+        });
+
+        return screenShareStream;
+    } catch (err) {
+        // Usuario canceló el diálogo de compartir → no bloquear
+        throw err;
+    }
+};
+
+// ── EVENTOS DE FOCO / PESTAÑA ────────────────────────────────────────────────
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-        mostrarOverlay('cambio_pestaña');
+        mostrarOverlayBloqueador('cambio_pestaña', false);
     } else {
         ocultarOverlay();
     }
 });
 
-// Evento: ventana pierde foco (Alt+Tab, minimizar)
-window.addEventListener('blur', () => mostrarOverlay('ventana_minimizada'));
-window.addEventListener('focus', () => ocultarOverlay());
+window.addEventListener('blur', () => {
+    mostrarOverlayBloqueador('ventana_minimizada', false);
+});
+window.addEventListener('focus', () => {
+    ocultarOverlay();
+});
 
 // --- 4. INTERCEPTAR CLIC DERECHO E INSPECCIONAR (disuasivo) ---
 document.addEventListener('contextmenu', (e) => {
