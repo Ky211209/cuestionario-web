@@ -1,10 +1,10 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y",
-    authDomain: "ky211209.github.io",  // ← Dominio propio: evita bloqueo de cookies en móvil
+    authDomain: "autenticacion-8faac.firebaseapp.com",
     projectId: "autenticacion-8faac",
     storageBucket: "autenticacion-8faac.firebasestorage.app",
     appId: "1:939518706600:web:d28c3ec7de21da8379939d"
@@ -12,6 +12,9 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+
+// Usar localStorage en vez de cookies → funciona en móvil sin bloqueo cross-domain
+setPersistence(auth, browserLocalPersistence).catch(e => console.warn("setPersistence error:", e));
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
@@ -240,52 +243,6 @@ let timerInterval = null;
 let tiempoLimiteSegundos = 0;
 let tiempoRestante = 0;
 
-// ================================================================
-// AUTENTICACIÓN — MÓVIL: redirect / ESCRITORIO: popup
-// ================================================================
-
-// ================================================================
-// AUTENTICACIÓN MÓVIL — getRedirectResult con authDomain propio
-// ================================================================
-// En GitHub Pages con Firebase, signInWithPopup y signInWithRedirect
-// fallan en móvil cuando authDomain = "proyecto.firebaseapp.com"
-// porque los navegadores bloquean cookies cross-domain (3rd party).
-// SOLUCIÓN: authDomain = "ky211209.github.io" (mismo dominio del sitio)
-// Así el token del redirect se guarda en first-party → no se bloquea.
-// REQUISITO: Agregar "ky211209.github.io" en Firebase Console →
-//            Authentication → Settings → Authorized domains
-
-// Mostrar indicador de carga mientras resolvemos el redirect
-const btnLogin = document.getElementById('btn-login');
-
-getRedirectResult(auth)
-    .then((result) => {
-        if (result && result.user) {
-            console.log('✅ Login por redirect exitoso:', result.user.email);
-            // onAuthStateChanged se encarga del resto
-        }
-    })
-    .catch((error) => {
-        console.error('getRedirectResult error:', error.code, error.message);
-        // Solo mostrar error si es un fallo real (no "sin redirect pendiente")
-        const erroresIgnorar = [
-            'auth/no-auth-event',
-            'auth/null-user', 
-            'auth/operation-not-supported-in-this-environment'
-        ];
-        if (!erroresIgnorar.includes(error.code)) {
-            if (btnLogin) {
-                btnLogin.disabled = false;
-                btnLogin.textContent = 'Acceder con Google';
-            }
-            Swal.fire({
-                icon: 'error',
-                title: 'Error de autenticación',
-                text: 'No se pudo completar el inicio de sesión. Intenta de nuevo.',
-                confirmButtonColor: '#1a73e8'
-            });
-        }
-    });
 
 // 1. MANEJO DE SESIÓN
 onAuthStateChanged(auth, async (user) => {
@@ -836,7 +793,9 @@ document.getElementById('btn-header-return').onclick = () => {
 };
 
 // ================================================================
-// BOTÓN LOGIN — redirect en móvil, popup en escritorio
+// BOTÓN LOGIN — signInWithPopup (móvil y escritorio)
+// browserLocalPersistence garantiza que la sesión se guarda en
+// localStorage, no en cookies, evitando el bucle en GitHub Pages móvil.
 // ================================================================
 document.getElementById('btn-login').onclick = async () => {
     const btnLogin = document.getElementById('btn-login');
@@ -844,28 +803,33 @@ document.getElementById('btn-login').onclick = async () => {
     btnLogin.textContent = 'Conectando...';
 
     try {
-        if (esMobil) {
-            // Móvil: redirect al mismo dominio (ky211209.github.io)
-            // No hay bloqueo de cookies porque es first-party
-            await signInWithRedirect(auth, provider);
-            // La página se recarga sola → getRedirectResult() captura el usuario
-        } else {
-            // Escritorio: popup más cómodo
-            await signInWithPopup(auth, provider);
-            btnLogin.disabled = false;
-            btnLogin.textContent = 'Acceder con Google';
-        }
+        await signInWithPopup(auth, provider);
+        // onAuthStateChanged detecta el login y muestra el simulador
     } catch (error) {
         btnLogin.disabled = false;
         btnLogin.textContent = 'Acceder con Google';
+
         const cancelaciones = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'];
         if (!cancelaciones.includes(error.code)) {
-            console.error('Error en login:', error.code, error.message);
-            Swal.fire({
-                icon: 'error', title: 'Error al iniciar sesión',
-                text: 'No se pudo conectar con Google. Verifica tu conexión e intenta de nuevo.',
-                confirmButtonColor: '#1a73e8'
-            });
+            console.error('Error login:', error.code, error.message);
+
+            if (error.code === 'auth/popup-blocked') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Ventana bloqueada',
+                    html: 'Tu navegador bloqueó la ventana de Google.<br><br>' +
+                          'Toca <strong>"Permitir"</strong> cuando el navegador te lo pida, ' +
+                          'o activa los popups en la configuración del navegador.',
+                    confirmButtonColor: '#1a73e8',
+                    confirmButtonText: 'Intentar de nuevo'
+                });
+            } else {
+                Swal.fire({
+                    icon: 'error', title: 'Error al iniciar sesión',
+                    text: 'No se pudo conectar con Google. Verifica tu conexión e intenta de nuevo.',
+                    confirmButtonColor: '#1a73e8'
+                });
+            }
         }
     }
 };
