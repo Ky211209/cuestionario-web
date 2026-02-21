@@ -312,29 +312,23 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 // 2. CARGAR MATERIAS
+// Las materias están embebidas directamente en el script para evitar
+// errores 404 en GitHub Pages al intentar hacer fetch del JSON.
+// Si necesitas agregar/quitar materias, edita el objeto CONFIG_MATERIAS abajo.
+const CONFIG_MATERIAS = {
+  "materias": [
+    { "id": "comp-forense",   "nombre": "Computación Forense",        "activa": true },
+    { "id": "deontologia",    "nombre": "Deontología",                "activa": true },
+    { "id": "auditoria-ti",   "nombre": "Auditoría de TI",            "activa": true },
+    { "id": "emprendimiento", "nombre": "Emprendimiento e Innovación", "activa": true },
+    { "id": "ia",             "nombre": "Inteligencia Artificial",     "activa": true },
+    { "id": "practicas-1",    "nombre": "Prácticas Laborales 1",      "activa": true }
+  ]
+};
+
 async function cargarMaterias() {
     try {
-        // Detectar la base URL correcta (crítico para GitHub Pages donde la ruta incluye el nombre del repo)
-        const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-        const origin = window.location.origin;
-        const pathname = window.location.pathname.replace(/\/[^/]*$/, '/'); // carpeta actual
-
-        const posiblesRutas = [
-            baseUrl + 'config-materias.json',          // URL absoluta basada en ubicación actual
-            origin + pathname + 'config-materias.json', // origen + path completo
-            'config-materias.json',                     // relativa simple
-            './config-materias.json',                   // relativa con punto
-        ];
-
-        let data = null;
-        for (const ruta of posiblesRutas) {
-            try {
-                const res = await fetch(ruta);
-                if (res.ok) { data = await res.json(); break; }
-            } catch (e) { continue; }
-        }
-
-        if (!data) throw new Error('No se encontró config-materias.json');
+        const data = CONFIG_MATERIAS;
 
         let materiasVisibles = data.materias.filter(m => m.activa);
 
