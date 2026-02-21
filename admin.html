@@ -684,6 +684,7 @@
                     <select id="imprimir-mostrar-respuestas" style="width:100%; padding:9px 12px; border-radius:7px; border:1.5px solid #ddd; font-size:0.88rem; background:white;">
                         <option value="si">✅ Sí, marcar respuesta correcta</option>
                         <option value="no">❌ No (modo examen)</option>
+                        <option value="solo">🎯 Solo respuesta correcta</option>
                     </select>
                 </div>
                 <div class="filtro-group">
@@ -1552,7 +1553,9 @@
                 Swal.fire('Atención', 'Selecciona una materia primero.', 'warning');
                 return;
             }
-            const mostrarResp = document.getElementById('imprimir-mostrar-respuestas').value === 'si';
+            const modoResp = document.getElementById('imprimir-mostrar-respuestas').value; // 'si' | 'no' | 'solo'
+            const mostrarResp = modoResp === 'si';
+            const soloCorrecta = modoResp === 'solo';
             const cantidadVal = document.getElementById('imprimir-cantidad').value;
             const nombreMateria = materias.find(m => m.id === materiaId)?.nombre || materiaId;
 
@@ -1576,12 +1579,18 @@
                 const letrasOpc = ['A', 'B', 'C', 'D'];
                 const fecha = new Date().toLocaleDateString('es-EC', { year:'numeric', month:'long', day:'numeric' });
 
+                const etiquetaModo = soloCorrecta
+                    ? '<div style="margin-top:10px;background:#e6f4ea;color:#1e7e34;padding:6px 14px;border-radius:20px;font-size:0.78rem;display:inline-block;font-weight:600;">🎯 SOLO RESPUESTA CORRECTA</div>'
+                    : !mostrarResp
+                        ? '<div style="margin-top:10px;background:#fff3cd;color:#856404;padding:6px 14px;border-radius:20px;font-size:0.78rem;display:inline-block;font-weight:600;">⚠ MODO EXAMEN · Sin respuestas marcadas</div>'
+                        : '';
+
                 let html = `
                     <div style="text-align:center;margin-bottom:30px;border-bottom:3px solid #1a73e8;padding-bottom:20px;">
                         <div style="font-size:0.78rem;color:#888;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Elisa Quizizz v2.0</div>
                         <h1 style="font-size:1.5rem;color:#1a73e8;margin:0 0 6px 0;font-family:'Segoe UI',sans-serif;">${nombreMateria}</h1>
                         <div style="font-size:0.85rem;color:#666;">Banco de Preguntas · ${preguntas.length} pregunta${preguntas.length!==1?'s':''} · ${fecha}</div>
-                        ${!mostrarResp ? '<div style="margin-top:10px;background:#fff3cd;color:#856404;padding:6px 14px;border-radius:20px;font-size:0.78rem;display:inline-block;font-weight:600;">⚠ MODO EXAMEN · Sin respuestas marcadas</div>' : ''}
+                        ${etiquetaModo}
                     </div>
                 `;
 
@@ -1590,34 +1599,45 @@
                     const opciones = p.opciones || [];
                     const correcta = p.respuesta;
 
-                    html += `<div class="pdf-pregunta" style="margin-bottom:20px;padding:14px 16px;border-left:3px solid #1a73e8;background:#fafafa;border-radius:0 8px 8px 0;page-break-inside:avoid;">
+                    html += `<div class="pdf-pregunta" style="margin-bottom:20px;padding:14px 16px;border-left:3px solid #1a73e8;background:#fafafa;border-radius:0 8px 8px 0;page-break-inside:avoid;break-inside:avoid;">
                         <p style="font-weight:700;font-size:0.93rem;margin:0 0 10px 0;color:#202124;">
                             <span style="background:#1a73e8;color:white;padding:2px 8px;border-radius:4px;font-size:0.78rem;margin-right:8px;font-family:monospace;">${idx+1}</span>
                             ${escapeHtml(texto)}
-                        </p>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-left:6px;">`;
+                        </p>`;
 
-                    opciones.forEach((op, oi) => {
-                        const esCorrecta = mostrarResp && oi === correcta;
-                        html += `<div style="padding:6px 10px;border-radius:6px;font-size:0.85rem;border:1.5px solid ${esCorrecta?'#34a853':'#e0e0e0'};background:${esCorrecta?'#e6f4ea':'white'};color:${esCorrecta?'#1e7e34':'#444'};font-weight:${esCorrecta?'700':'400'};display:flex;align-items:center;gap:7px;">
-                            <span style="background:${esCorrecta?'#34a853':'#e8f0fe'};color:${esCorrecta?'white':'#1a73e8'};width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:800;flex-shrink:0;">${letrasOpc[oi]}</span>
-                            ${escapeHtml(op)}
-                            ${esCorrecta?'<span style="margin-left:auto;font-size:1rem;">✓</span>':''}
+                    if (soloCorrecta) {
+                        // Modo "solo respuesta correcta": mostrar únicamente la opción correcta
+                        const textoCorrecta = opciones[correcta] || '';
+                        html += `<div style="display:flex;align-items:center;gap:8px;margin-left:6px;padding:8px 12px;border-radius:6px;background:#e6f4ea;border:1.5px solid #34a853;">
+                            <span style="background:#34a853;color:white;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;flex-shrink:0;">${letrasOpc[correcta]}</span>
+                            <span style="color:#1e7e34;font-weight:700;font-size:0.9rem;">${escapeHtml(textoCorrecta)}</span>
+                            <span style="margin-left:auto;color:#34a853;font-size:1rem;">✓</span>
                         </div>`;
-                    });
+                    } else {
+                        // Modo "todas las opciones" (con o sin resaltado)
+                        html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-left:6px;">`;
+                        opciones.forEach((op, oi) => {
+                            const esCorrecta = mostrarResp && oi === correcta;
+                            html += `<div style="padding:6px 10px;border-radius:6px;font-size:0.85rem;border:1.5px solid ${esCorrecta?'#34a853':'#e0e0e0'};background:${esCorrecta?'#e6f4ea':'white'};color:${esCorrecta?'#1e7e34':'#444'};font-weight:${esCorrecta?'700':'400'};display:flex;align-items:center;gap:7px;">
+                                <span style="background:${esCorrecta?'#34a853':'#e8f0fe'};color:${esCorrecta?'white':'#1a73e8'};width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:800;flex-shrink:0;">${letrasOpc[oi]}</span>
+                                ${escapeHtml(op)}
+                                ${esCorrecta?'<span style="margin-left:auto;font-size:1rem;">✓</span>':''}
+                            </div>`;
+                        });
+                        html += `</div>`;
+                    }
 
-                    html += `</div>`;
-
-                    if (mostrarResp && p.explicacion_correcta) {
+                    if ((mostrarResp || soloCorrecta) && p.explicacion_correcta) {
                         html += `<div style="margin-top:8px;padding:7px 10px;background:#e8f0fe;border-radius:6px;font-size:0.78rem;color:#1a73e8;"><strong>💡</strong> ${escapeHtml(p.explicacion_correcta)}</div>`;
                     }
                     html += `</div>`;
                 });
 
+                const labelModo = soloCorrecta ? 'Solo respuesta correcta' : mostrarResp ? 'Con respuestas' : 'Sin respuestas (examen)';
                 document.getElementById('pdf-content').innerHTML = html;
                 document.getElementById('pdf-preview-area').style.display = 'block';
                 document.getElementById('pdf-empty-state').style.display = 'none';
-                document.getElementById('pdf-info-label').innerText = `📄 ${preguntas.length} preguntas · "${nombreMateria}" · ${mostrarResp?'Con respuestas':'Sin respuestas (examen)'}`;
+                document.getElementById('pdf-info-label').innerText = `📄 ${preguntas.length} preguntas · "${nombreMateria}" · ${labelModo}`;
                 document.getElementById('pdf-preview-area').scrollIntoView({ behavior:'smooth' });
 
             } catch(e) {
