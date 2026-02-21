@@ -1,12 +1,36 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteField, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
+
+// ── DETECCIÓN DE MÓVIL ───────────────────────────────────────────────────────
+function esMobile() {
+    return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
+}
+
+// ── ID ÚNICO POR DISPOSITIVO ─────────────────────────────────────────────────
+function getDeviceId() {
+    let id = localStorage.getItem('device_id');
+    if (!id) {
+        id = 'dev_' + Math.random().toString(36).substr(2, 12) + '_' + Date.now();
+        localStorage.setItem('device_id', id);
+    }
+    return id;
+}
+
+// ── CAPTURAR REDIRECT DE GOOGLE EN MÓVILES ───────────────────────────────────
+if (esMobile()) {
+    getRedirectResult(auth).catch((error) => {
+        if (error && error.code !== 'auth/no-current-user') {
+            console.error('Error en redirect:', error);
+        }
+    });
+}
 
 // ================================================================
 // MÓDULO DE SEGURIDAD
@@ -284,16 +308,6 @@ let startTime = null;
 let tiempoLimiteSegundos = 0;   // 0 = sin límite
 let tiempoRestante = 0;         // para cuenta regresiva
 
-// Genera un ID único y persistente para este dispositivo/navegador
-function getDeviceId() {
-    let id = localStorage.getItem('device_id');
-    if (!id) {
-        id = 'dev_' + Math.random().toString(36).substr(2, 12) + '_' + Date.now();
-        localStorage.setItem('device_id', id);
-    }
-    return id;
-}
-
 // 1. MANEJO DE SESIÓN PERMANENTE
 onAuthStateChanged(auth, async (user) => {
     const adminLinkContainer = document.getElementById('admin-link-container');
@@ -302,9 +316,8 @@ onAuthStateChanged(auth, async (user) => {
         const userEmail = user.email.toLowerCase();
         const displayName = user.displayName || userEmail;
         const esAdminUser = userEmail === ADMIN_EMAIL;
-        const enListaPermitidos = USUARIOS_PERMITIDOS.includes(userEmail);
 
-        // ── VERIFICAR ACCESO EN FIREBASE ──────────────────────────
+        // ── VERIFICAR ACCESO EN FIREBASE ──────────────────────────────────
         let userData = null;
         if (!esAdminUser) {
             try {
@@ -321,7 +334,7 @@ onAuthStateChanged(auth, async (user) => {
                 }
                 userData = userDoc.data();
             } catch (error) {
-                console.error('Error verificando usuario en Firebase:', error);
+                console.error('Error verificando usuario:', error);
                 await Swal.fire({
                     icon: 'error',
                     title: 'Error de conexión',
@@ -333,22 +346,20 @@ onAuthStateChanged(auth, async (user) => {
             }
         }
 
-        // ── VALIDAR LÍMITE DE DISPOSITIVOS ────────────────────────
+        // ── VALIDAR LÍMITE DE DISPOSITIVOS ────────────────────────────────
         if (!esAdminUser && userData) {
             const maxDispositivos = userData.max_dispositivos || 2;
             const dispositivosActivos = userData.dispositivos || {};
             const deviceId = getDeviceId();
 
-            // Si este dispositivo no está registrado aún
             if (!dispositivosActivos[deviceId]) {
                 const cantidadActual = Object.keys(dispositivosActivos).length;
-
                 if (cantidadActual >= maxDispositivos) {
                     await Swal.fire({
                         icon: 'error',
                         title: 'Límite de dispositivos alcanzado',
                         html: `Tu cuenta permite acceder desde <strong>${maxDispositivos}</strong> dispositivo(s).<br>
-                               Ya tienes <strong>${cantidadActual}</strong> dispositivo(s) registrado(s).<br><br>
+                               Ya tienes <strong>${cantidadActual}</strong> registrado(s).<br><br>
                                Contacta al administrador para restablecer tus dispositivos.`,
                         confirmButtonText: 'Entendido',
                         confirmButtonColor: '#ea4335'
@@ -356,16 +367,15 @@ onAuthStateChanged(auth, async (user) => {
                     signOut(auth);
                     return;
                 }
-
-                // Registrar este nuevo dispositivo
-                const dispositivosActualizados = { ...dispositivosActivos };
-                dispositivosActualizados[deviceId] = {
+                // Registrar nuevo dispositivo
+                const nuevosDisp = { ...dispositivosActivos };
+                nuevosDisp[deviceId] = {
                     registrado: new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }),
                     userAgent: navigator.userAgent.substring(0, 100)
                 };
                 try {
                     await updateDoc(doc(db, "usuarios_seguros", userEmail), {
-                        dispositivos: dispositivosActualizados
+                        dispositivos: nuevosDisp
                     });
                 } catch(e) {
                     console.warn('No se pudo registrar dispositivo:', e);
@@ -373,7 +383,7 @@ onAuthStateChanged(auth, async (user) => {
             }
         }
 
-        // ── INICIALIZAR SESIÓN ────────────────────────────────────
+        // ── INICIALIZAR SESIÓN ────────────────────────────────────────────
         currentUserEmail = userEmail;
         currentUserName = displayName;
         crearMarcaDeAgua(userEmail);
@@ -1084,6 +1094,8 @@ document.getElementById('btn-login').onclick = () => {
     if (esMobile()) {
         signInWithRedirect(auth, provider);
     } else {
-        signInWithPopup(auth, provider);
+        signInWithPopup(auth, provider).catch(err => {
+            console.error('Error en popup:', err);
+        });
     }
 };
