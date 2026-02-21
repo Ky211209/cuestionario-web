@@ -502,7 +502,16 @@ onAuthStateChanged(auth, async (user) => {
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('setup-screen').classList.remove('hidden');
         document.getElementById('user-display').classList.remove('hidden');
-        document.getElementById('user-info').innerText = `${displayName.toUpperCase()} (${maxDisp} Disp.)`;
+
+        // Header: solo iniciales o primer nombre (compacto para móvil)
+        const primerNombre = displayName.split(' ')[0];
+        document.getElementById('user-info').innerText = `${primerNombre.toUpperCase()}`;
+
+        // Tarjeta de bienvenida en setup-screen (nombre completo visible)
+        const welcomeName = document.getElementById('user-welcome-name');
+        const welcomeSub = document.getElementById('user-welcome-sub');
+        if (welcomeName) welcomeName.innerText = displayName.toUpperCase();
+        if (welcomeSub) welcomeSub.innerText = `${userEmail} · ${maxDisp} dispositivo${maxDisp !== 1 ? 's' : ''}`;
 
         if (esAdminUser) {
             adminLinkContainer.classList.remove('hidden');
