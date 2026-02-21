@@ -90,42 +90,6 @@
         <div id="question-text" style="font-weight: bold; text-align: left; margin-bottom: 20px; font-size: 1.1rem;"></div>
         <div id="options-container"></div>
     </div>
-
-    <script type="module" src="script.js"></script>
-    <script type="module">
-        import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-        const isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
-        if (isMobile) {
-            // Reutilizar la instancia de Firebase ya iniciada por script.js
-            const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
-            const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-            const auth = getAuth(app);
-            const provider = new GoogleAuthProvider();
-            provider.setCustomParameters({ prompt: 'select_account' });
-
-            // Procesar resultado al volver de Google
-            getRedirectResult(auth).catch(e => console.warn('redirect result:', e?.code));
-
-            // Esperar a que script.js cargue y sobreescribir el botón
-            window.addEventListener('DOMContentLoaded', () => {
-                setTimeout(() => {
-                    const btn = document.getElementById('btn-login');
-                    if (btn) {
-                        btn.onclick = () => {
-                            btn.textContent = 'Redirigiendo a Google...';
-                            btn.disabled = true;
-                            signInWithRedirect(auth, provider).catch(err => {
-                                btn.textContent = 'Acceder con Google';
-                                btn.disabled = false;
-                                console.error('redirect error:', err);
-                            });
-                        };
-                    }
-                }, 800);
-            });
-        }
-    </script>
 </body>
 </html>
+
