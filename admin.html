@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Panel Admin - UNEMI</title>
+    <title>Panel Admin - QuizEli</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -462,6 +462,7 @@
         }
 
         @media print {
+            @page { margin: 1cm; }
             body * { visibility: hidden !important; }
             #pdf-content, #pdf-content * { visibility: visible !important; }
             #pdf-content {
@@ -484,7 +485,7 @@
     <header>
         <div class="logo">
             <i class="fa-solid fa-shield-halved" style="color:#1a73e8;"></i>
-            <h1>Panel Admin <span class="subtitle">UNEMI</span></h1>
+            <h1>Panel Admin <span class="subtitle">QuizEli</span></h1>
         </div>
         <div style="display: flex; gap: 15px; align-items: center;">
             <span id="admin-name" style="font-weight: bold; color: #1a73e8;"></span>
@@ -1587,7 +1588,7 @@
 
                 let html = `
                     <div style="text-align:center;margin-bottom:30px;border-bottom:3px solid #1a73e8;padding-bottom:20px;">
-                        <div style="font-size:0.78rem;color:#888;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Elisa Quizizz v2.0</div>
+                        <div style="font-size:0.78rem;color:#888;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">QuizEli v2.0</div>
                         <h1 style="font-size:1.5rem;color:#1a73e8;margin:0 0 6px 0;font-family:'Segoe UI',sans-serif;">${nombreMateria}</h1>
                         <div style="font-size:0.85rem;color:#666;">Banco de Preguntas · ${preguntas.length} pregunta${preguntas.length!==1?'s':''} · ${fecha}</div>
                         ${etiquetaModo}
