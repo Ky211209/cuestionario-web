@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y",
@@ -431,15 +431,59 @@ document.getElementById('btn-start').onclick = async () => {
         selectedAnswers = new Array(questions.length).fill(null);
 
         if (currentMode === "study") {
-            const saved = localStorage.getItem(`progreso_${currentMateria}`);
-            if (saved) {
+            // Mostrar indicador mientras carga el progreso
+            Swal.fire({
+                title: 'Cargando...',
+                text: 'Buscando tu progreso guardado.',
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            const progresoGuardado = await cargarProgresoGuardado();
+            Swal.close();
+
+            if (progresoGuardado && progresoGuardado.currentIndex > 0) {
+                // Intentar restaurar el mismo orden de preguntas
+                if (progresoGuardado.questionsIds && progresoGuardado.questionsIds.length > 0) {
+                    const qMap = {};
+                    questions.forEach(q => qMap[q.id] = q);
+                    const reordenadas = progresoGuardado.questionsIds
+                        .map(id => qMap[id])
+                        .filter(q => q !== undefined);
+                    if (reordenadas.length === progresoGuardado.questionsIds.length) {
+                        questions = reordenadas; // Restaurar orden exacto
+                    }
+                }
+
+                // Restaurar respuestas guardadas
+                if (progresoGuardado.selectedAnswers &&
+                    progresoGuardado.selectedAnswers.length === questions.length) {
+                    selectedAnswers = progresoGuardado.selectedAnswers;
+                }
+
+                const fecha = progresoGuardado.fecha || 'anteriormente';
                 const result = await Swal.fire({
-                    title: 'Avance Detectado',
-                    text: '¿Deseas retomar lo avanzado o empezar desde la primera pregunta?',
-                    icon: 'question', showCancelButton: true,
-                    confirmButtonText: 'Retomar avance', cancelButtonText: 'Empezar de cero'
+                    title: '📚 Avance Detectado',
+                    html: `
+                        <p>Tienes progreso guardado en <strong>pregunta ${progresoGuardado.currentIndex + 1}</strong>
+                        de ${progresoGuardado.totalPreguntas || questions.length}.</p>
+                        <p style="color:#888;font-size:0.85rem;margin-top:8px;">Guardado: ${fecha}</p>
+                    `,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#1a73e8',
+                    confirmButtonText: '▶ Continuar donde lo dejé',
+                    cancelButtonText: '🔄 Empezar de cero'
                 });
-                currentIndex = result.isConfirmed ? parseInt(saved) : 0;
+
+                if (result.isConfirmed) {
+                    currentIndex = progresoGuardado.currentIndex;
+                } else {
+                    currentIndex = 0;
+                    selectedAnswers = new Array(questions.length).fill(null);
+                    await borrarProgresoGuardado();
+                }
             } else {
                 currentIndex = 0;
             }
@@ -533,7 +577,7 @@ function renderQuestion() {
         const btnPrev = document.createElement('button');
         btnPrev.className = 'btn-secondary';
         btnPrev.innerHTML = '<i class="fas fa-arrow-left"></i> Anterior';
-        btnPrev.onclick = () => { currentIndex--; renderQuestion(); guardarAvanceAutomatico(); };
+        btnPrev.onclick = () => { currentIndex--; renderQuestion(); guardarAvanceAutomatico(); }; // async fire-and-forget
         navDiv.appendChild(btnPrev);
     }
 
@@ -661,7 +705,7 @@ function finalizarExamen() {
             text: 'Has terminado todas las preguntas de estudio.',
             confirmButtonColor: '#1a73e8'
         }).then(() => {
-            localStorage.removeItem(`progreso_${currentMateria}`);
+            await borrarProgresoGuardado(); // Limpia Firestore + localStorage
             location.reload();
         });
     }
@@ -762,9 +806,74 @@ function stopTimer() {
     if (timerInterval) clearInterval(timerInterval);
 }
 
-// 9. GUARDADO AUTOMÁTICO
-function guardarAvanceAutomatico() {
-    if (currentMode === "study") localStorage.setItem(`progreso_${currentMateria}`, currentIndex);
+// 9. GUARDADO AUTOMÁTICO EN FIRESTORE + LOCALSTORAGE (backup offline)
+async function guardarAvanceAutomatico() {
+    if (currentMode !== "study") return;
+
+    // Backup local inmediato (funciona sin red)
+    localStorage.setItem(`progreso_${currentMateria}_index`, currentIndex);
+    localStorage.setItem(`progreso_${currentMateria}_answers`, JSON.stringify(selectedAnswers));
+    localStorage.setItem(`progreso_${currentMateria}_qids`, JSON.stringify(questions.map(q => q.id)));
+
+    // Guardar en Firestore (sincroniza entre dispositivos)
+    try {
+        const docId = `${currentUserEmail}_${currentMateria}`;
+        await setDoc(doc(db, "progreso_estudio", docId), {
+            usuario: currentUserEmail,
+            materia: currentMateria,
+            currentIndex,
+            selectedAnswers,
+            questionsIds: questions.map(q => q.id),
+            totalPreguntas: questions.length,
+            timestamp: serverTimestamp(),
+            fecha: new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })
+        });
+    } catch (e) {
+        // Fallo silencioso — el backup local ya está guardado
+        console.warn("Firestore save failed (usando backup local):", e.message);
+    }
+}
+
+// CARGAR PROGRESO DESDE FIRESTORE (con fallback a localStorage)
+async function cargarProgresoGuardado() {
+    try {
+        const docId = `${currentUserEmail}_${currentMateria}`;
+        const snap = await getDoc(doc(db, "progreso_estudio", docId));
+        if (snap.exists()) {
+            return snap.data();
+        }
+    } catch (e) {
+        console.warn("No se pudo leer progreso de Firestore:", e.message);
+    }
+
+    // Fallback: localStorage
+    const savedIndex = localStorage.getItem(`progreso_${currentMateria}_index`);
+    const savedAnswers = localStorage.getItem(`progreso_${currentMateria}_answers`);
+    const savedQids = localStorage.getItem(`progreso_${currentMateria}_qids`);
+    if (savedIndex !== null) {
+        return {
+            currentIndex: parseInt(savedIndex),
+            selectedAnswers: savedAnswers ? JSON.parse(savedAnswers) : [],
+            questionsIds: savedQids ? JSON.parse(savedQids) : [],
+            totalPreguntas: null
+        };
+    }
+    return null;
+}
+
+// BORRAR PROGRESO AL FINALIZAR
+async function borrarProgresoGuardado() {
+    // Limpiar localStorage
+    localStorage.removeItem(`progreso_${currentMateria}_index`);
+    localStorage.removeItem(`progreso_${currentMateria}_answers`);
+    localStorage.removeItem(`progreso_${currentMateria}_qids`);
+    // Limpiar Firestore
+    try {
+        const docId = `${currentUserEmail}_${currentMateria}`;
+        await deleteDoc(doc(db, "progreso_estudio", docId));
+    } catch (e) {
+        console.warn("No se pudo borrar progreso de Firestore:", e.message);
+    }
 }
 
 // 10. CERRAR SESIÓN
