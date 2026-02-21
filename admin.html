@@ -587,12 +587,7 @@
         <div id="tab-users" class="hidden">
             <h3>Gestión de Alumnos (CRUD)</h3>
             <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center;">
-                    <input type="email" id="edit-email" placeholder="correo@unemi.edu.ec" style="flex:1; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
-                    <button id="btn-nuevo-usuario" title="Limpiar formulario para nuevo usuario" style="padding:10px 14px; border-radius:5px; border:1px solid #34a853; background:#e6f4ea; color:#1e7e34; cursor:pointer; font-weight:700; font-size:0.85rem; white-space:nowrap; transition:all 0.2s;" onmouseover="this.style.background='#34a853';this.style.color='white';" onmouseout="this.style.background='#e6f4ea';this.style.color='#1e7e34';">
-                        <i class="fas fa-user-plus"></i> Nuevo
-                    </button>
-                </div>
+                <input type="email" id="edit-email" placeholder="correo@unemi.edu.ec" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 10px;">
                 
                 <div style="display:flex; gap:10px; margin-bottom:10px;">
                     <select id="edit-limit" style="flex:1; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
@@ -607,13 +602,7 @@
 
                 <!-- Materias: solo visible si rol = usuario -->
                 <div id="materias-asignacion" style="margin-bottom:10px;">
-                    <label style="font-size:0.82rem; font-weight:700; color:#5f6368; display:block; margin-bottom:6px; text-transform:uppercase;">
-                        <i class="fas fa-book" style="color:#1a73e8;"></i> Materias con acceso
-                    </label>
-                    <div style="display:flex; gap:6px; margin-bottom:6px;">
-                        <button id="btn-sel-todas" style="font-size:0.75rem; padding:4px 10px; border-radius:5px; border:1px solid #1a73e8; background:#e8f0fe; color:#1a73e8; cursor:pointer;">✔ Todas</button>
-                        <button id="btn-desel-todas" style="font-size:0.75rem; padding:4px 10px; border-radius:5px; border:1px solid #ddd; background:#f8f9fa; color:#666; cursor:pointer;">✖ Ninguna</button>
-                    </div>
+                    <label style="font-size:0.82rem; font-weight:700; color:#5f6368; display:block; margin-bottom:6px; text-transform:uppercase;">Materias con acceso</label>
                     <div id="materias-checkboxes" style="display:grid; grid-template-columns:1fr 1fr; gap:6px; background:white; border:1px solid #ddd; border-radius:6px; padding:10px;">
                         <!-- Se llenan dinámicamente -->
                     </div>
@@ -826,7 +815,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, deleteDoc, addDoc, collection, getDocs, writeBatch, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, updateDoc, deleteDoc, addDoc, collection, getDocs, writeBatch, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
         const app = initializeApp(firebaseConfig);
@@ -1304,7 +1293,7 @@
         function llenarCheckboxesMaterias(materiasSeleccionadas = []) {
             const cont = document.getElementById('materias-checkboxes');
             cont.innerHTML = materias.map(m => `
-                <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem; cursor:pointer; padding:4px; border-radius:5px; transition:background 0.15s;" onmouseover="this.style.background='#f0f6ff'" onmouseout="this.style.background='transparent'">
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem; cursor:pointer; padding:4px;">
                     <input type="checkbox" value="${m.id}" 
                            ${materiasSeleccionadas.includes(m.id) ? 'checked' : ''}
                            style="width:14px; height:14px; accent-color:#1a73e8;">
@@ -1313,41 +1302,16 @@
             `).join('');
         }
 
-        // Botones Seleccionar/Deseleccionar todas
-        document.getElementById('btn-sel-todas').onclick = () => {
-            document.querySelectorAll('#materias-checkboxes input[type=checkbox]').forEach(cb => cb.checked = true);
-        };
-        document.getElementById('btn-desel-todas').onclick = () => {
-            document.querySelectorAll('#materias-checkboxes input[type=checkbox]').forEach(cb => cb.checked = false);
-        };
-
-        // Botón nuevo usuario: limpiar formulario
-        document.getElementById('btn-nuevo-usuario').onclick = () => {
-            document.getElementById('edit-email').value = '';
-            document.getElementById('edit-limit').value = '2';
-            document.getElementById('edit-rol').value = 'usuario';
-            document.getElementById('materias-asignacion').style.display = 'block';
-            llenarCheckboxesMaterias([]);
-            document.getElementById('edit-email').focus();
-        };
-
         // Mostrar/ocultar materias según rol
         document.getElementById('edit-rol').addEventListener('change', (e) => {
-            const isAdmin = e.target.value === 'admin';
-            document.getElementById('materias-asignacion').style.display = isAdmin ? 'none' : 'block';
-            // Si no hay checkboxes aún, inicializarlos
-            if (!isAdmin && document.getElementById('materias-checkboxes').innerHTML.trim() === '') {
-                llenarCheckboxesMaterias([]);
-            }
+            document.getElementById('materias-asignacion').style.display =
+                e.target.value === 'admin' ? 'none' : 'block';
         });
 
         async function loadUsers() {
             const body = document.getElementById('user-table-body');
             body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:20px;">Cargando...</td></tr>';
-            // Solo inicializar checkboxes si el contenedor está vacío (primera carga)
-            if (document.getElementById('materias-checkboxes').innerHTML.trim() === '') {
-                llenarCheckboxesMaterias([]);
-            }
+            llenarCheckboxesMaterias();
             const snap = await getDocs(collection(db, "usuarios_seguros"));
             body.innerHTML = '';
             snap.forEach(d => {
@@ -1563,13 +1527,7 @@
             });
             document.getElementById(`btn-tab-${id.replace('tab-', '')}`).classList.add('active');
 
-            if (id === 'tab-users') {
-                // Inicializar checkboxes si es la primera vez
-                if (document.getElementById('materias-checkboxes').innerHTML.trim() === '') {
-                    llenarCheckboxesMaterias([]);
-                }
-                loadUsers();
-            }
+            if (id === 'tab-users') loadUsers();
             if (id === 'tab-auditoria') cargarAuditoria();
         };
 
