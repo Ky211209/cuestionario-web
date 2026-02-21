@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Panel Admin - ElisaQuizizz v2.0</title>
+    <title>Panel Admin - UNEMI</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -465,7 +465,7 @@
             body * { visibility: hidden !important; }
             #pdf-content, #pdf-content * { visibility: visible !important; }
             #pdf-content {
-                position: fixed !important;
+                position: absolute !important;
                 top: 0; left: 0;
                 width: 100% !important;
                 padding: 20px 30px !important;
@@ -473,8 +473,10 @@
                 box-shadow: none !important;
                 border-radius: 0 !important;
                 font-size: 12pt;
+                overflow: visible !important;
+                height: auto !important;
             }
-            .pdf-pregunta { page-break-inside: avoid; }
+            .pdf-pregunta { page-break-inside: avoid; break-inside: avoid; }
         }
     </style>
 </head>
@@ -1667,4 +1669,3 @@
     </script>
 </body>
 </html>
-
