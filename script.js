@@ -338,10 +338,16 @@ onAuthStateChanged(auth, async (user) => {
 // 2. CARGAR MATERIAS
 async function cargarMaterias() {
     try {
+        // Detectar la base URL correcta (crítico para GitHub Pages donde la ruta incluye el nombre del repo)
+        const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+        const origin = window.location.origin;
+        const pathname = window.location.pathname.replace(/\/[^/]*$/, '/'); // carpeta actual
+
         const posiblesRutas = [
-            'config-materias.json',
-            './config-materias.json',
-            '/config-materias.json'
+            baseUrl + 'config-materias.json',          // URL absoluta basada en ubicación actual
+            origin + pathname + 'config-materias.json', // origen + path completo
+            'config-materias.json',                     // relativa simple
+            './config-materias.json',                   // relativa con punto
         ];
 
         let data = null;
