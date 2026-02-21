@@ -1,8 +1,15 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
+const firebaseConfig = {
+    apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y",
+    authDomain: "autenticacion-8faac.firebaseapp.com",
+    projectId: "autenticacion-8faac",
+    storageBucket: "autenticacion-8faac.firebasestorage.app",
+    appId: "1:939518706600:web:d28c3ec7de21da8379939d"
+};
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -12,7 +19,7 @@ const provider = new GoogleAuthProvider();
 // DETECCIÓN DE DISPOSITIVO MÓVIL
 // ================================================================
 const esMobil = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent)
-    || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)); // iPad con iPadOS
+    || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)); // iPad iPadOS
 
 // ================================================================
 // MÓDULO DE SEGURIDAD
@@ -22,9 +29,8 @@ let currentUserName = "";
 let watermarkElement = null;
 let contentHidden = false;
 
-// --- 1. MARCA DE AGUA DISCRETA ---
+// --- 1. MARCA DE AGUA ---
 function crearMarcaDeAgua(email) {
-    if (watermarkElement) watermarkElement.remove();
     watermarkElement = email;
 }
 
@@ -45,23 +51,12 @@ function insertarMarcaEnPregunta(email) {
         margin-bottom: 6px;
         letter-spacing: 0.03em;
     `;
-
     const quizScreen = document.getElementById('quiz-screen');
     const questionText = document.getElementById('question-text');
     quizScreen.insertBefore(wm, questionText);
 }
 
-function mostrarMarcaDeAgua() {
-    const wm = document.getElementById('security-watermark');
-    if (wm) wm.style.display = 'block';
-}
-
-function ocultarMarcaDeAgua() {
-    const wm = document.getElementById('security-watermark');
-    if (wm) wm.style.display = 'none';
-}
-
-// --- 2. LOG DE AUDITORÍA EN FIREBASE ---
+// --- 2. LOG DE AUDITORÍA ---
 async function registrarAcceso(tipo, detalle = {}) {
     if (!currentUserEmail) return;
     try {
@@ -79,14 +74,10 @@ async function registrarAcceso(tipo, detalle = {}) {
     }
 }
 
-// --- 3. OVERLAY BLOQUEADOR + DETECCIÓN DE PANTALLA COMPARTIDA ---
+// --- 3. OVERLAY DE SEGURIDAD ---
 let overlayOcultar = null;
 let screenShareStream = null;
 let screenShareBloqueado = false;
-
-function esAdmin() {
-    return currentUserEmail === ADMIN_EMAIL;
-}
 
 function crearOverlay() {
     if (overlayOcultar) return;
@@ -109,12 +100,10 @@ function crearOverlay() {
 
 function mostrarOverlayBloqueador(motivo, esCompartirPantalla = false) {
     if (!overlayOcultar) return;
-
     const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
     if (!quizVisible) return;
 
     contentHidden = true;
-
     const icono = esCompartirPantalla ? '🔴' : '🛡️';
     const titulo = esCompartirPantalla ? 'COMPARTIR PANTALLA BLOQUEADO' : 'CONTENIDO PROTEGIDO';
     const mensaje = esCompartirPantalla
@@ -131,13 +120,7 @@ function mostrarOverlayBloqueador(motivo, esCompartirPantalla = false) {
             <p style="color: #aaa; font-size: 1rem; line-height: 1.7; margin-bottom: 28px;">
                 ${mensaje}
             </p>
-            <div style="
-                background: rgba(255,255,255,0.07);
-                border: 1px solid rgba(255,255,255,0.15);
-                border-radius: 12px;
-                padding: 16px 24px;
-                display: inline-block;
-            ">
+            <div style="background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 16px 24px; display: inline-block;">
                 <p style="color: #fff; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; opacity: 0.6;">
                     Sesión identificada como
                 </p>
@@ -148,13 +131,9 @@ function mostrarOverlayBloqueador(motivo, esCompartirPantalla = false) {
                     ${currentUserEmail}
                 </p>
             </div>
-            ${esCompartirPantalla ? '' : `
-            <p style="color: #555; font-size: 0.8rem; margin-top: 28px;">
-                Este evento ha sido registrado
-            </p>`}
+            ${esCompartirPantalla ? '' : `<p style="color: #555; font-size: 0.8rem; margin-top: 28px;">Este evento ha sido registrado</p>`}
         </div>
     `;
-
     overlayOcultar.style.display = 'flex';
     registrarAcceso(esCompartirPantalla ? 'intento_compartir_pantalla' : 'perder_foco', { motivo });
 }
@@ -166,44 +145,41 @@ function ocultarOverlay() {
     overlayOcultar.style.display = 'none';
 }
 
-// ── DETECCIÓN DE SCREEN SHARE ────────────────────────────────────────────────
-const _originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+// ── DETECCIÓN DE SCREEN SHARE (SOLO DESKTOP — en móvil no existe getDisplayMedia) ─
+// FIX CRÍTICO #2: Verificar que getDisplayMedia exista antes de interceptarlo
+if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+    const _originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getDisplayMedia = async function(constraints) {
+        const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
+        if (!quizVisible) return _originalGetDisplayMedia(constraints);
 
-navigator.mediaDevices.getDisplayMedia = async function(constraints) {
-    const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
-    if (!quizVisible) return _originalGetDisplayMedia(constraints);
+        try {
+            screenShareStream = await _originalGetDisplayMedia(constraints);
+            screenShareBloqueado = true;
+            mostrarOverlayBloqueador('screen_share_detectado', true);
 
-    try {
-        screenShareStream = await _originalGetDisplayMedia(constraints);
-        screenShareBloqueado = true;
-        mostrarOverlayBloqueador('screen_share_detectado', true);
-
-        screenShareStream.getVideoTracks().forEach(track => {
-            track.addEventListener('ended', () => {
-                screenShareBloqueado = false;
-                screenShareStream = null;
-                contentHidden = false;
-                overlayOcultar.style.display = 'none';
-                registrarAcceso('pantalla_compartida_detenida');
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Transmisión cerrada',
-                    text: 'Puedes continuar con el simulador.',
-                    timer: 3000,
-                    showConfirmButton: false,
-                    toast: true,
-                    position: 'top-end'
+            screenShareStream.getVideoTracks().forEach(track => {
+                track.addEventListener('ended', () => {
+                    screenShareBloqueado = false;
+                    screenShareStream = null;
+                    contentHidden = false;
+                    overlayOcultar.style.display = 'none';
+                    registrarAcceso('pantalla_compartida_detenida');
+                    Swal.fire({
+                        icon: 'success', title: 'Transmisión cerrada',
+                        text: 'Puedes continuar con el simulador.',
+                        timer: 3000, showConfirmButton: false, toast: true, position: 'top-end'
+                    });
                 });
             });
-        });
+            return screenShareStream;
+        } catch (err) {
+            throw err;
+        }
+    };
+}
 
-        return screenShareStream;
-    } catch (err) {
-        throw err;
-    }
-};
-
-// ── EVENTOS DE FOCO / PESTAÑA ────────────────────────────────────────────────
+// ── EVENTOS DE FOCO / PESTAÑA ─────────────────────────────────────────────────
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
         mostrarOverlayBloqueador('cambio_pestaña', false);
@@ -212,20 +188,21 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-window.addEventListener('blur', () => mostrarOverlayBloqueador('ventana_minimizada', false));
-window.addEventListener('focus', () => ocultarOverlay());
+// FIX CRÍTICO #3: En móvil, el blur se dispara al abrir teclado virtual → NO usar en móvil
+if (!esMobil) {
+    window.addEventListener('blur', () => mostrarOverlayBloqueador('ventana_minimizada', false));
+    window.addEventListener('focus', () => ocultarOverlay());
+}
 
-// --- 4. INTERCEPTAR CLIC DERECHO E INSPECCIONAR ---
+// --- 4. PROTECCIÓN: CLIC DERECHO Y TECLADO ---
 document.addEventListener('contextmenu', (e) => {
     const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
     if (quizVisible) {
         e.preventDefault();
         Swal.fire({
-            icon: 'warning',
-            title: 'Acción Restringida',
+            icon: 'warning', title: 'Acción Restringida',
             text: 'El clic derecho está deshabilitado durante el simulador.',
-            timer: 2000,
-            showConfirmButton: false
+            timer: 2000, showConfirmButton: false
         });
     }
 });
@@ -248,8 +225,9 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ================================================================
+// CONFIGURACIÓN
+// ================================================================
 const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
-
 const USUARIOS_PERMITIDOS = [
     "kholguinb2@unemi.edu.ec",
     "iastudillol@unemi.edu.ec",
@@ -259,39 +237,38 @@ const USUARIOS_PERMITIDOS = [
 let currentMateria = "", currentMode = "", questions = [], currentIndex = 0;
 let selectedAnswers = [];
 let timerInterval = null;
-let startTime = null;
 let tiempoLimiteSegundos = 0;
 let tiempoRestante = 0;
 
 // ================================================================
-// AUTENTICACIÓN CON SOPORTE MÓVIL (signInWithRedirect) Y ESCRITORIO (signInWithPopup)
+// AUTENTICACIÓN — MÓVIL: redirect / ESCRITORIO: popup
 // ================================================================
 
-// Al cargar la página, verificar si venimos de un redirect de Google (móvil)
+// Capturar resultado del redirect (solo aplica después de volver de Google en móvil)
 getRedirectResult(auth)
     .then((result) => {
         if (result && result.user) {
             console.log('✅ Login por redirect exitoso:', result.user.email);
-            // onAuthStateChanged se encarga del resto automáticamente
         }
     })
     .catch((error) => {
-        // Ignorar error "no-redirect" que ocurre cuando no hay redirect pendiente
-        if (error.code !== 'auth/no-auth-event' && error.code !== 'auth/null-user') {
-            console.error('Error en getRedirectResult:', error);
-            // Solo mostrar error si es un fallo real de autenticación
-            if (error.code && error.code.startsWith('auth/')) {
+        // Errores normales cuando no hay redirect pendiente — ignorar
+        const erroresNormales = ['auth/no-auth-event', 'auth/null-user', 'auth/operation-not-supported-in-this-environment'];
+        if (!erroresNormales.includes(error.code)) {
+            console.error('Error en getRedirectResult:', error.code, error.message);
+            // Solo alertar si es un error real de login fallido
+            if (error.code === 'auth/account-exists-with-different-credential' ||
+                error.code === 'auth/user-disabled') {
                 Swal.fire({
-                    icon: 'error',
-                    title: 'Error de autenticación',
-                    text: 'Hubo un problema al iniciar sesión. Por favor intenta de nuevo.',
+                    icon: 'error', title: 'Error de acceso',
+                    text: 'Hubo un problema con tu cuenta de Google. Contacta al administrador.',
                     confirmButtonColor: '#1a73e8'
                 });
             }
         }
     });
 
-// 1. MANEJO DE SESIÓN PERMANENTE
+// 1. MANEJO DE SESIÓN
 onAuthStateChanged(auth, async (user) => {
     const adminLinkContainer = document.getElementById('admin-link-container');
 
@@ -306,8 +283,7 @@ onAuthStateChanged(auth, async (user) => {
                 const userDoc = await getDoc(doc(db, "usuarios_seguros", userEmail));
                 if (!userDoc.exists()) {
                     await Swal.fire({
-                        icon: 'error',
-                        title: 'Acceso Denegado',
+                        icon: 'error', title: 'Acceso Denegado',
                         text: 'No tienes autorización para usar este simulador. Contacta al administrador.',
                         confirmButtonText: 'Entendido'
                     });
@@ -325,14 +301,20 @@ onAuthStateChanged(auth, async (user) => {
         crearOverlay();
         registrarAcceso('inicio_sesion');
 
+        // Mostrar pantalla principal
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('setup-screen').classList.remove('hidden');
         document.getElementById('user-display').classList.remove('hidden');
-        document.getElementById('user-info').innerText = `${user.displayName.toUpperCase()} (2 Disp.)`;
+        document.getElementById('user-info').innerText = `${currentUserName.toUpperCase()} (2 Disp.)`;
 
+        // FIX #4: Rellenar tarjeta de bienvenida del HTML (estaba vacía)
+        const welcomeName = document.getElementById('user-welcome-name');
+        const welcomeSub = document.getElementById('user-welcome-sub');
+        if (welcomeName) welcomeName.textContent = currentUserName.toUpperCase();
+        if (welcomeSub) welcomeSub.textContent = userEmail;
+
+        // Admin link
         const esAdminUser = userEmail === ADMIN_EMAIL;
-        console.log('¿Es administradora?', esAdminUser);
-
         if (esAdminUser) {
             adminLinkContainer.classList.remove('hidden');
             adminLinkContainer.style.display = 'block';
@@ -343,7 +325,6 @@ onAuthStateChanged(auth, async (user) => {
 
         cargarMaterias();
     } else {
-        console.log('Usuario no autenticado');
         document.getElementById('auth-screen').classList.remove('hidden');
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('user-display').classList.add('hidden');
@@ -354,33 +335,24 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// 2. CARGAR MATERIAS Y ACTIVAR BOTÓN
+// 2. CARGAR MATERIAS
 async function cargarMaterias() {
     try {
         const posiblesRutas = [
             'config-materias.json',
             './config-materias.json',
-            '/config-materias.json',
-            'data/config-materias.json',
-            './data/config-materias.json'
+            '/config-materias.json'
         ];
 
         let data = null;
-
         for (const ruta of posiblesRutas) {
             try {
                 const res = await fetch(ruta);
-                if (res.ok) {
-                    data = await res.json();
-                    console.log(`✅ Materias cargadas desde: ${ruta}`);
-                    break;
-                }
-            } catch (e) {
-                continue;
-            }
+                if (res.ok) { data = await res.json(); break; }
+            } catch (e) { continue; }
         }
 
-        if (!data) throw new Error('No se encontró el archivo config-materias.json en ninguna ruta');
+        if (!data) throw new Error('No se encontró config-materias.json');
 
         let materiasVisibles = data.materias.filter(m => m.activa);
 
@@ -390,13 +362,12 @@ async function cargarMaterias() {
                 const userDoc = await getDoc(doc(db, "usuarios_seguros", currentUserEmail));
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
-                    const rol = userData.rol || 'usuario';
-                    if (rol !== 'admin' && userData.materias && userData.materias.length > 0) {
+                    if (userData.rol !== 'admin' && userData.materias && userData.materias.length > 0) {
                         materiasVisibles = materiasVisibles.filter(m => userData.materias.includes(m.id));
                     }
                 }
             } catch(e) {
-                console.error('Error obteniendo rol del usuario:', e);
+                console.error('Error obteniendo rol:', e);
             }
         }
 
@@ -431,9 +402,8 @@ async function cargarMaterias() {
         };
 
         const modeSelect = document.getElementById('mode-select');
-        const tiempoContainer = document.getElementById('tiempo-container');
-        const cantidadContainer = document.getElementById('cantidad-container');
         const opcionSinLimite = document.getElementById('opcion-sin-limite');
+        const cantidadContainer = document.getElementById('cantidad-container');
         const tiempoSelect = document.getElementById('tiempo-select');
 
         modeSelect.onchange = () => {
@@ -446,26 +416,18 @@ async function cargarMaterias() {
                 if (tiempoSelect.value === '0') tiempoSelect.value = '20';
             }
         };
+
     } catch (error) {
         console.error('Error cargando materias:', error);
         Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            html: `
-                <p>No se pudo cargar la lista de materias.</p>
-                <p style="font-size: 0.85rem; color: #666; margin-top: 10px;">
-                    Verifica que el archivo <code>config-materias.json</code> esté en la raíz del proyecto.
-                </p>
-                <p style="font-size: 0.8rem; color: #999; margin-top: 5px;">
-                    Error técnico: ${error.message}
-                </p>
-            `,
+            icon: 'error', title: 'Error',
+            html: `<p>No se pudo cargar la lista de materias.</p><p style="font-size:0.85rem;color:#999;margin-top:8px;">Error: ${error.message}</p>`,
             confirmButtonColor: '#1a73e8'
         });
     }
 }
 
-// 3. INICIAR EXAMEN O RECUPERAR PROGRESO
+// 3. INICIAR EXAMEN
 document.getElementById('btn-start').onclick = async () => {
     currentMateria = document.getElementById('subject-select').value;
     currentMode = document.getElementById('mode-select').value;
@@ -476,12 +438,7 @@ document.getElementById('btn-start').onclick = async () => {
         const snap = await getDocs(collection(db, `bancos_preguntas/${currentMateria}/preguntas`));
 
         if (snap.empty) {
-            Swal.fire({
-                icon: 'info',
-                title: 'Aviso',
-                text: 'Atención: No existen preguntas cargadas para esta materia.',
-                confirmButtonColor: '#1a73e8'
-            });
+            Swal.fire({ icon: 'info', title: 'Aviso', text: 'No existen preguntas cargadas para esta materia.', confirmButtonColor: '#1a73e8' });
             return;
         }
 
@@ -490,15 +447,12 @@ document.getElementById('btn-start').onclick = async () => {
 
         if (currentMode === "exam") {
             questions = questions.slice(0, 20);
-            selectedAnswers = new Array(questions.length).fill(null);
         } else {
             const cantidadSelect = document.getElementById('cantidad-select');
             const cantidadElegida = cantidadSelect ? cantidadSelect.value : '20';
-            if (cantidadElegida !== 'todas') {
-                questions = questions.slice(0, 20);
-            }
-            selectedAnswers = new Array(questions.length).fill(null);
+            if (cantidadElegida !== 'todas') questions = questions.slice(0, 20);
         }
+        selectedAnswers = new Array(questions.length).fill(null);
 
         if (currentMode === "study") {
             const saved = localStorage.getItem(`progreso_${currentMateria}`);
@@ -506,20 +460,18 @@ document.getElementById('btn-start').onclick = async () => {
                 const result = await Swal.fire({
                     title: 'Avance Detectado',
                     text: '¿Deseas retomar lo avanzado o empezar desde la primera pregunta?',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'Retomar avance',
-                    cancelButtonText: 'Empezar de cero'
+                    icon: 'question', showCancelButton: true,
+                    confirmButtonText: 'Retomar avance', cancelButtonText: 'Empezar de cero'
                 });
                 currentIndex = result.isConfirmed ? parseInt(saved) : 0;
             } else {
                 currentIndex = 0;
             }
-            startTimer();
         } else {
             currentIndex = 0;
-            startTimer();
         }
+
+        startTimer();
 
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('quiz-screen').classList.remove('hidden');
@@ -529,20 +481,13 @@ document.getElementById('btn-start').onclick = async () => {
 
     } catch (error) {
         console.error('Error cargando preguntas:', error);
-        Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Hubo un problema al cargar las preguntas. Por favor, intenta de nuevo.'
-        });
+        Swal.fire({ icon: 'error', title: 'Error', text: 'Hubo un problema al cargar las preguntas. Intenta de nuevo.' });
     }
 };
 
 // 4. RENDERIZAR PREGUNTA
 function renderQuestion() {
-    if (currentIndex >= questions.length) {
-        finalizarExamen();
-        return;
-    }
+    if (currentIndex >= questions.length) { finalizarExamen(); return; }
 
     const question = questions[currentIndex];
     const questionText = document.getElementById('question-text');
@@ -562,6 +507,7 @@ function renderQuestion() {
     questionText.textContent = `${currentIndex + 1}. ${preguntaTexto}`;
     optionsContainer.innerHTML = '';
 
+    // Botón volver al menú
     const menuButton = document.createElement('button');
     menuButton.className = 'btn-back-menu';
     menuButton.innerHTML = '<i class="fas fa-home"></i> Volver al Menú';
@@ -569,16 +515,9 @@ function renderQuestion() {
         Swal.fire({
             title: '¿Volver al menú?',
             text: currentMode === "study" ? 'Tu progreso se guardará automáticamente.' : 'Perderás el progreso de este examen.',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#1a73e8',
-            confirmButtonText: 'Sí, volver'
-        }).then((res) => {
-            if (res.isConfirmed) {
-                stopTimer();
-                location.reload();
-            }
-        });
+            icon: 'warning', showCancelButton: true,
+            confirmButtonColor: '#1a73e8', confirmButtonText: 'Sí, volver'
+        }).then((res) => { if (res.isConfirmed) { stopTimer(); location.reload(); } });
     };
     optionsContainer.appendChild(menuButton);
 
@@ -596,11 +535,8 @@ function renderQuestion() {
 
         if (currentMode === "study" && yaRespondida) {
             button.disabled = true;
-            if (index === question.respuesta) {
-                button.classList.add('correct');
-            } else if (index === selectedAnswers[currentIndex]) {
-                button.classList.add('incorrect');
-            }
+            if (index === question.respuesta) button.classList.add('correct');
+            else if (index === selectedAnswers[currentIndex]) button.classList.add('incorrect');
         } else if (selectedAnswers[currentIndex] === index) {
             button.classList.add('selected');
         }
@@ -610,46 +546,10 @@ function renderQuestion() {
     });
 
     if (currentMode === "study" && yaRespondida) {
-        const feedbackBox = document.createElement('div');
-        feedbackBox.id = 'feedback-box';
-        const correct = question.respuesta;
-        const userAnswer = selectedAnswers[currentIndex];
-
-        feedbackBox.style.cssText = `
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: left;
-            background: ${userAnswer === correct ? '#e6f4ea' : '#fce8e6'};
-            border-left: 4px solid ${userAnswer === correct ? '#34a853' : '#ea4335'};
-        `;
-
-        if (userAnswer === correct) {
-            feedbackBox.innerHTML = `
-                <p style="font-weight: bold; color: #34a853; margin-bottom: 8px;">
-                    <i class="fas fa-check-circle"></i> ¡Correcto!
-                </p>
-                <p style="color: #555; font-size: 0.95rem;">
-                    ${question.explicacion_correcta || 'Has seleccionado la respuesta correcta. ¡Excelente trabajo!'}
-                </p>
-            `;
-        } else {
-            feedbackBox.innerHTML = `
-                <p style="font-weight: bold; color: #ea4335; margin-bottom: 8px;">
-                    <i class="fas fa-times-circle"></i> Incorrecto
-                </p>
-                <p style="color: #555; font-size: 0.95rem; margin-bottom: 8px;">
-                    La respuesta correcta es: <strong>${String.fromCharCode(65 + correct)}) ${question.opciones[correct]}</strong>
-                </p>
-                <p style="color: #666; font-size: 0.9rem;">
-                    ${question.explicacion_correcta || 'Revisa el material de estudio para comprender mejor este tema.'}
-                </p>
-            `;
-        }
-
-        optionsContainer.appendChild(feedbackBox);
+        optionsContainer.appendChild(crearFeedbackBox(question, selectedAnswers[currentIndex]));
     }
 
+    // Navegación
     const navDiv = document.createElement('div');
     navDiv.style.cssText = 'display: flex; justify-content: space-between; margin-top: 25px; gap: 10px;';
 
@@ -657,11 +557,7 @@ function renderQuestion() {
         const btnPrev = document.createElement('button');
         btnPrev.className = 'btn-secondary';
         btnPrev.innerHTML = '<i class="fas fa-arrow-left"></i> Anterior';
-        btnPrev.onclick = () => {
-            currentIndex--;
-            renderQuestion();
-            guardarAvanceAutomatico();
-        };
+        btnPrev.onclick = () => { currentIndex--; renderQuestion(); guardarAvanceAutomatico(); };
         navDiv.appendChild(btnPrev);
     }
 
@@ -677,28 +573,45 @@ function renderQuestion() {
         btnNext.onclick = () => {
             if (selectedAnswers[currentIndex] === null && currentMode === "exam") {
                 Swal.fire({
-                    icon: 'warning',
-                    title: 'Pregunta sin responder',
+                    icon: 'warning', title: 'Pregunta sin responder',
                     text: '¿Deseas continuar sin responder?',
-                    showCancelButton: true,
-                    confirmButtonText: 'Sí, continuar'
+                    showCancelButton: true, confirmButtonText: 'Sí, continuar'
                 }).then(result => {
-                    if (result.isConfirmed) {
-                        currentIndex++;
-                        renderQuestion();
-                        guardarAvanceAutomatico();
-                    }
+                    if (result.isConfirmed) { currentIndex++; renderQuestion(); guardarAvanceAutomatico(); }
                 });
             } else {
-                currentIndex++;
-                renderQuestion();
-                guardarAvanceAutomatico();
+                currentIndex++; renderQuestion(); guardarAvanceAutomatico();
             }
         };
     }
 
     navDiv.appendChild(btnNext);
     optionsContainer.appendChild(navDiv);
+}
+
+// Helper: crear caja de feedback
+function crearFeedbackBox(question, userAnswer) {
+    const correct = question.respuesta;
+    const feedbackBox = document.createElement('div');
+    feedbackBox.id = 'feedback-box';
+    feedbackBox.style.cssText = `
+        margin-top: 20px; padding: 15px; border-radius: 8px; text-align: left;
+        background: ${userAnswer === correct ? '#e6f4ea' : '#fce8e6'};
+        border-left: 4px solid ${userAnswer === correct ? '#34a853' : '#ea4335'};
+    `;
+    if (userAnswer === correct) {
+        feedbackBox.innerHTML = `
+            <p style="font-weight:bold;color:#34a853;margin-bottom:8px;"><i class="fas fa-check-circle"></i> ¡Correcto!</p>
+            <p style="color:#555;font-size:0.95rem;">${question.explicacion_correcta || '¡Excelente trabajo!'}</p>
+        `;
+    } else {
+        feedbackBox.innerHTML = `
+            <p style="font-weight:bold;color:#ea4335;margin-bottom:8px;"><i class="fas fa-times-circle"></i> Incorrecto</p>
+            <p style="color:#555;font-size:0.95rem;margin-bottom:8px;">La respuesta correcta es: <strong>${String.fromCharCode(65 + correct)}) ${question.opciones[correct]}</strong></p>
+            <p style="color:#666;font-size:0.9rem;">${question.explicacion_correcta || 'Revisa el material de estudio.'}</p>
+        `;
+    }
+    return feedbackBox;
 }
 
 // 5. SELECCIONAR RESPUESTA
@@ -711,11 +624,8 @@ function selectAnswer(optionIndex) {
 
         buttons.forEach((btn, idx) => {
             btn.disabled = true;
-            if (idx === correct) {
-                btn.classList.add('correct');
-            } else if (idx === optionIndex) {
-                btn.classList.add('incorrect');
-            }
+            if (idx === correct) btn.classList.add('correct');
+            else if (idx === optionIndex) btn.classList.add('incorrect');
         });
 
         selectedAnswers[currentIndex] = optionIndex;
@@ -724,39 +634,7 @@ function selectAnswer(optionIndex) {
         const existingFeedback = document.getElementById('feedback-box');
         if (existingFeedback) existingFeedback.remove();
 
-        const feedbackBox = document.createElement('div');
-        feedbackBox.id = 'feedback-box';
-        feedbackBox.style.cssText = `
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: left;
-            background: ${optionIndex === correct ? '#e6f4ea' : '#fce8e6'};
-            border-left: 4px solid ${optionIndex === correct ? '#34a853' : '#ea4335'};
-        `;
-
-        if (optionIndex === correct) {
-            feedbackBox.innerHTML = `
-                <p style="font-weight: bold; color: #34a853; margin-bottom: 8px;">
-                    <i class="fas fa-check-circle"></i> ¡Correcto!
-                </p>
-                <p style="color: #555; font-size: 0.95rem;">
-                    ${question.explicacion_correcta || 'Has seleccionado la respuesta correcta. ¡Excelente trabajo!'}
-                </p>
-            `;
-        } else {
-            feedbackBox.innerHTML = `
-                <p style="font-weight: bold; color: #ea4335; margin-bottom: 8px;">
-                    <i class="fas fa-times-circle"></i> Incorrecto
-                </p>
-                <p style="color: #555; font-size: 0.95rem; margin-bottom: 8px;">
-                    La respuesta correcta es: <strong>${String.fromCharCode(65 + correct)}) ${question.opciones[correct]}</strong>
-                </p>
-                <p style="color: #666; font-size: 0.9rem;">
-                    ${question.explicacion_correcta || 'Revisa el material de estudio para comprender mejor este tema.'}
-                </p>
-            `;
-        }
+        const feedbackBox = crearFeedbackBox(question, optionIndex);
 
         const navButtons = optionsContainer.querySelector('div[style*="justify-content: space-between"]');
         if (navButtons) {
@@ -778,41 +656,32 @@ function finalizarExamen() {
 
     if (currentMode === "exam") {
         let correctas = 0;
-        questions.forEach((q, idx) => {
-            if (selectedAnswers[idx] === q.respuesta) correctas++;
-        });
+        questions.forEach((q, idx) => { if (selectedAnswers[idx] === q.respuesta) correctas++; });
 
         const porcentaje = ((correctas / questions.length) * 100).toFixed(1);
 
         let tiempoTexto;
         if (tiempoLimiteSegundos > 0) {
             const usados = tiempoLimiteSegundos - tiempoRestante;
-            const min = Math.floor(usados / 60);
-            const seg = usados % 60;
+            const min = Math.floor(usados / 60), seg = usados % 60;
             tiempoTexto = `${String(min).padStart(2,'0')}:${String(seg).padStart(2,'0')} de ${tiempoLimiteSegundos/60} min`;
         } else {
             tiempoTexto = document.getElementById('timer-display').textContent;
         }
 
         Swal.fire({
-            icon: 'info',
-            title: 'Examen Finalizado',
-            html: `
-                <p style="font-size: 1.1rem; margin: 15px 0;">
-                    <strong>Respuestas correctas:</strong> ${correctas} / ${questions.length}<br>
-                    <strong>Calificación:</strong> ${porcentaje}%<br>
-                    <strong>Tiempo:</strong> ${tiempoTexto}
-                </p>
-            `,
+            icon: 'info', title: 'Examen Finalizado',
+            html: `<p style="font-size:1.1rem;margin:15px 0;">
+                <strong>Respuestas correctas:</strong> ${correctas} / ${questions.length}<br>
+                <strong>Calificación:</strong> ${porcentaje}%<br>
+                <strong>Tiempo:</strong> ${tiempoTexto}
+            </p>`,
             confirmButtonColor: '#1a73e8',
             confirmButtonText: 'Ver Resultados Detallados'
-        }).then(() => {
-            mostrarResultadosDetallados(correctas);
-        });
+        }).then(() => mostrarResultadosDetallados(correctas));
     } else {
         Swal.fire({
-            icon: 'success',
-            title: '¡Sesión Completada!',
+            icon: 'success', title: '¡Sesión Completada!',
             text: 'Has terminado todas las preguntas de estudio.',
             confirmButtonColor: '#1a73e8'
         }).then(() => {
@@ -822,39 +691,33 @@ function finalizarExamen() {
     }
 }
 
-// 7. MOSTRAR RESULTADOS DETALLADOS
+// 7. RESULTADOS DETALLADOS
 function mostrarResultadosDetallados(correctas) {
     const container = document.getElementById('quiz-screen');
     container.innerHTML = `
-        <h2 style="color: #1a73e8; margin-bottom: 20px;">Resultados Detallados</h2>
-        <div style="text-align: center; margin-bottom: 30px;">
-            <div style="font-size: 3rem; color: ${correctas >= questions.length * 0.7 ? '#34a853' : '#ea4335'};">
+        <h2 style="color:#1a73e8;margin-bottom:20px;">Resultados Detallados</h2>
+        <div style="text-align:center;margin-bottom:30px;">
+            <div style="font-size:3rem;color:${correctas >= questions.length * 0.7 ? '#34a853' : '#ea4335'};">
                 ${((correctas / questions.length) * 100).toFixed(1)}%
             </div>
-            <p style="color: #666;">Correctas: ${correctas} / ${questions.length}</p>
+            <p style="color:#666;">Correctas: ${correctas} / ${questions.length}</p>
         </div>
         <div id="detailed-results"></div>
-        <button onclick="location.reload()" class="btn-primary" style="margin-top: 20px;">Volver al Menú</button>
+        <button onclick="location.reload()" class="btn-primary" style="margin-top:20px;">Volver al Menú</button>
     `;
 
     const resultsDiv = document.getElementById('detailed-results');
     questions.forEach((q, idx) => {
         const userAnswer = selectedAnswers[idx];
         const isCorrect = userAnswer === q.respuesta;
-
         const resultCard = document.createElement('div');
         resultCard.style.cssText = `
-            background: ${isCorrect ? '#e6f4ea' : '#fce8e6'};
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            text-align: left;
-            border-left: 4px solid ${isCorrect ? '#34a853' : '#ea4335'};
+            background:${isCorrect ? '#e6f4ea' : '#fce8e6'};padding:15px;border-radius:8px;
+            margin-bottom:15px;text-align:left;border-left:4px solid ${isCorrect ? '#34a853' : '#ea4335'};
         `;
-
         resultCard.innerHTML = `
-            <p style="font-weight: bold; margin-bottom: 8px;">${idx + 1}. ${q.texto || q.explicacion || q.pregunta || 'Pregunta sin texto'}</p>
-            <p style="color: #666; font-size: 0.9rem;">
+            <p style="font-weight:bold;margin-bottom:8px;">${idx + 1}. ${q.texto || q.explicacion || q.pregunta || 'Sin texto'}</p>
+            <p style="color:#666;font-size:0.9rem;">
                 Tu respuesta: <strong>${userAnswer !== null ? String.fromCharCode(65 + userAnswer) : 'Sin responder'}</strong><br>
                 Respuesta correcta: <strong>${String.fromCharCode(65 + q.respuesta)}</strong>
             </p>
@@ -863,31 +726,30 @@ function mostrarResultadosDetallados(correctas) {
     });
 }
 
-// 8. CRONÓMETRO / CUENTA REGRESIVA
+// 8. TIMER
 function startTimer() {
     const display = document.getElementById('timer-display');
-    const label   = document.getElementById('timer-label');
+    const label = document.getElementById('timer-label');
 
     if (tiempoLimiteSegundos > 0) {
         tiempoRestante = tiempoLimiteSegundos;
         label.style.display = 'block';
         label.textContent = 'Tiempo restante';
-        display.style.color = '#1a73e8';
         display.style.display = 'block';
+        display.style.color = '#1a73e8';
 
         function actualizarDisplay() {
-            const min = Math.floor(tiempoRestante / 60);
-            const seg = tiempoRestante % 60;
+            const min = Math.floor(tiempoRestante / 60), seg = tiempoRestante % 60;
             display.textContent = `${String(min).padStart(2,'0')}:${String(seg).padStart(2,'0')}`;
-
             if (tiempoRestante <= 60) {
                 display.style.color = '#ea4335';
-                display.style.animation = 'none';
                 display.style.opacity = tiempoRestante % 2 === 0 ? '0.4' : '1';
             } else if (tiempoRestante <= 300) {
                 display.style.color = '#f29900';
+                display.style.opacity = '1';
             } else {
                 display.style.color = '#1a73e8';
+                display.style.opacity = '1';
             }
         }
 
@@ -898,40 +760,19 @@ function startTimer() {
             actualizarDisplay();
 
             if (tiempoRestante === 300) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '⏳ 5 minutos restantes',
-                    text: 'Ve terminando tus respuestas.',
-                    timer: 3000,
-                    showConfirmButton: false,
-                    toast: true,
-                    position: 'top-end'
-                });
+                Swal.fire({ icon:'warning', title:'⏳ 5 minutos restantes', text:'Ve terminando tus respuestas.', timer:3000, showConfirmButton:false, toast:true, position:'top-end' });
             } else if (tiempoRestante === 60) {
-                Swal.fire({
-                    icon: 'error',
-                    title: '🚨 ¡1 minuto!',
-                    text: 'El tiempo está por agotarse.',
-                    timer: 3000,
-                    showConfirmButton: false,
-                    toast: true,
-                    position: 'top-end'
-                });
+                Swal.fire({ icon:'error', title:'🚨 ¡1 minuto!', text:'El tiempo está por agotarse.', timer:3000, showConfirmButton:false, toast:true, position:'top-end' });
             } else if (tiempoRestante <= 0) {
                 clearInterval(timerInterval);
                 display.textContent = '00:00';
                 display.style.opacity = '1';
                 Swal.fire({
-                    icon: 'error',
-                    title: '⏰ ¡Tiempo agotado!',
-                    text: 'El tiempo límite ha terminado. Se enviarán tus respuestas automáticamente.',
-                    confirmButtonColor: '#ea4335',
-                    confirmButtonText: 'Ver resultados',
-                    allowOutsideClick: false,
-                    allowEscapeKey: false
-                }).then(() => {
-                    finalizarExamen();
-                });
+                    icon:'error', title:'⏰ ¡Tiempo agotado!',
+                    text:'El tiempo límite ha terminado. Se enviarán tus respuestas automáticamente.',
+                    confirmButtonColor:'#ea4335', confirmButtonText:'Ver resultados',
+                    allowOutsideClick:false, allowEscapeKey:false
+                }).then(() => finalizarExamen());
             }
         }, 1000);
 
@@ -947,66 +788,55 @@ function stopTimer() {
 
 // 9. GUARDADO AUTOMÁTICO
 function guardarAvanceAutomatico() {
-    if (currentMode === "study") {
-        localStorage.setItem(`progreso_${currentMateria}`, currentIndex);
-    }
+    if (currentMode === "study") localStorage.setItem(`progreso_${currentMateria}`, currentIndex);
 }
 
 // 10. CERRAR SESIÓN
 document.getElementById('btn-logout').onclick = () => {
     Swal.fire({
         title: 'Cerrar Sesión',
-        text: currentMode === "study"
-            ? "Tu progreso ha sido guardado automáticamente y podrás continuar más tarde."
-            : "¿Estás seguro de que deseas cerrar sesión?",
-        icon: 'question',
-        showCancelButton: true,
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#1a73e8',
-        confirmButtonText: 'Aceptar'
+        text: currentMode === "study" ? "Tu progreso ha sido guardado y podrás continuar más tarde." : "¿Estás seguro?",
+        icon: 'question', showCancelButton: true,
+        cancelButtonText: 'Cancelar', confirmButtonColor: '#1a73e8', confirmButtonText: 'Aceptar'
     }).then((result) => {
-        if (result.isConfirmed) {
-            stopTimer();
-            signOut(auth).then(() => location.reload());
-        }
+        if (result.isConfirmed) { stopTimer(); signOut(auth).then(() => location.reload()); }
     });
 };
 
 document.getElementById('btn-header-return').onclick = () => {
     Swal.fire({
-        title: '¿Volver al menú?',
-        text: 'Se guardará tu progreso si estás en modo estudio.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#1a73e8'
-    }).then((res) => {
-        if (res.isConfirmed) {
-            stopTimer();
-            location.reload();
-        }
-    });
+        title: '¿Volver al menú?', text: 'Se guardará tu progreso si estás en modo estudio.',
+        icon: 'warning', showCancelButton: true, confirmButtonColor: '#1a73e8'
+    }).then((res) => { if (res.isConfirmed) { stopTimer(); location.reload(); } });
 };
 
 // ================================================================
-// BOTÓN LOGIN: signInWithRedirect en móvil, signInWithPopup en escritorio
+// BOTÓN LOGIN — FIX PRINCIPAL: redirect en móvil, popup en escritorio
 // ================================================================
 document.getElementById('btn-login').onclick = async () => {
+    const btnLogin = document.getElementById('btn-login');
+    btnLogin.disabled = true;
+    btnLogin.textContent = 'Conectando...';
+
     try {
         if (esMobil) {
-            // En móvil: redirect (más confiable, no hay popup bloqueado)
+            // Móvil: redirige a Google y vuelve → getRedirectResult() lo captura al cargar
             await signInWithRedirect(auth, provider);
-            // La página se recargará automáticamente y getRedirectResult() lo capturará
+            // Después del redirect, la página se recarga automáticamente
         } else {
-            // En escritorio: popup (más rápido y sin recarga de página)
+            // Escritorio: ventana emergente
             await signInWithPopup(auth, provider);
         }
     } catch (error) {
-        // Solo mostrar error si NO es cancelación del usuario
-        if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
-            console.error('Error en login:', error);
+        btnLogin.disabled = false;
+        btnLogin.textContent = 'Acceder con Google';
+
+        // Ignorar cancelaciones del usuario
+        const cancelaciones = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'];
+        if (!cancelaciones.includes(error.code)) {
+            console.error('Error en login:', error.code, error.message);
             Swal.fire({
-                icon: 'error',
-                title: 'Error al iniciar sesión',
+                icon: 'error', title: 'Error al iniciar sesión',
                 text: 'No se pudo conectar con Google. Verifica tu conexión e intenta de nuevo.',
                 confirmButtonColor: '#1a73e8'
             });
