@@ -1,6 +1,12 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+function getDeviceId() {
+    let id = localStorage.getItem('device_id');
+    if (!id) { id = 'dev_' + Math.random().toString(36).substr(2,12) + '_' + Date.now(); localStorage.setItem('device_id', id); }
+    return id;
+}
 
 const firebaseConfig = {
     apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y",
@@ -17,6 +23,11 @@ const auth = getAuth(app);
 setPersistence(auth, browserLocalPersistence).catch(e => console.warn("setPersistence error:", e));
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
+
+// FIX MÓVIL: capturar resultado al regresar de Google tras redirect
+getRedirectResult(auth).catch(err => {
+    if (err && err.code !== 'auth/cancelled-popup-request') console.warn('redirect result:', err.code);
+});
 
 // ================================================================
 // DETECCIÓN DE DISPOSITIVO MÓVIL
@@ -228,6 +239,84 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ================================================================
+// EXTENSIÓN QUIZELI STUDY HELPER
+// ================================================================
+// 👇 REEMPLAZA ESTE ID con el que Chrome te asigne al cargar la extensión
+// Ve a chrome://extensions/ → activa Modo Desarrollador → carga la carpeta
+// → copia el ID que aparece debajo del nombre "QuizEli Study Helper"
+const EXTENSION_ID = 'TU_EXTENSION_ID_AQUI';
+
+let bloqueadoPorMeet = false;
+
+async function verificarExtension() {
+    return new Promise((resolve) => {
+        try {
+            if (typeof chrome === 'undefined' || !chrome.runtime) return resolve(false);
+            chrome.runtime.sendMessage(EXTENSION_ID, { tipo: 'PING' }, (response) => {
+                if (chrome.runtime.lastError || !response) return resolve(false);
+                resolve(response.instalada === true);
+            });
+        } catch(e) { resolve(false); }
+    });
+}
+
+async function verificarRequisitoExtension() {
+    if (esMobil) return;
+    const instalada = await verificarExtension();
+    if (!instalada) {
+        document.getElementById('setup-screen').classList.add('hidden');
+        const bloq = document.createElement('div');
+        bloq.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#f0f2f5;z-index:99999;display:flex;justify-content:center;align-items:center;padding:30px;';
+        bloq.innerHTML = `<div style="background:white;border-radius:16px;padding:40px;max-width:460px;box-shadow:0 8px 30px rgba(0,0,0,0.12);text-align:center;">
+            <div style="font-size:3.5rem;margin-bottom:16px;">📚</div>
+            <h2 style="color:#1a73e8;margin-bottom:12px;">QuizEli Study Helper Requerido</h2>
+            <p style="color:#555;font-size:0.95rem;line-height:1.6;margin-bottom:24px;">Para usar el Simulador QuizEli necesitas el asistente oficial instalado en Chrome.</p>
+            <button onclick="location.reload()" style="background:none;border:none;color:#888;font-size:0.85rem;cursor:pointer;text-decoration:underline;margin-top:8px;">Ya lo instalé, verificar de nuevo</button>
+        </div>`;
+        document.body.appendChild(bloq);
+        return;
+    }
+}
+
+function notificarExamenIniciado() {
+    try { if (typeof chrome !== 'undefined' && chrome.runtime) chrome.runtime.sendMessage(EXTENSION_ID, { tipo: 'EXAMEN_INICIADO' }); } catch(e) {}
+}
+function notificarExamenTerminado() {
+    try { if (typeof chrome !== 'undefined' && chrome.runtime) chrome.runtime.sendMessage(EXTENSION_ID, { tipo: 'EXAMEN_TERMINADO' }); } catch(e) {}
+}
+
+window.addEventListener('unemi_meet_detectado', (e) => {
+    if (bloqueadoPorMeet) return;
+    bloqueadoPorMeet = true;
+    const plataforma = e.detail?.plataforma || '';
+    const nombre = plataforma.includes('meet.google') ? 'Google Meet' : plataforma.includes('zoom') ? 'Zoom' : plataforma.includes('teams') ? 'Microsoft Teams' : plataforma.includes('discord') ? 'Discord' : 'videoconferencia';
+    registrarAcceso('meet_detectado', { plataforma: nombre });
+    if (!overlayOcultar) return;
+    const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
+    if (!quizVisible) return;
+    contentHidden = true;
+    overlayOcultar.innerHTML = `<div style="max-width:480px;padding:40px;text-align:center;">
+        <div style="font-size:4rem;margin-bottom:20px;">🔴</div>
+        <p style="color:#ff4444;font-size:1.8rem;font-weight:900;margin-bottom:16px;">${nombre.toUpperCase()} DETECTADO</p>
+        <p style="color:#aaa;font-size:1rem;line-height:1.7;margin-bottom:28px;">Se detectó <strong>${nombre}</strong>. Las preguntas están ocultas hasta que cierres la aplicación.</p>
+        <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:12px;padding:16px 24px;display:inline-block;">
+            <p style="color:#facc15;font-size:1.1rem;font-weight:700;margin:0;">${currentUserName}</p>
+            <p style="color:#aaa;font-size:0.85rem;margin:4px 0 0;">${currentUserEmail}</p>
+        </div>
+        <p style="color:#555;font-size:0.8rem;margin-top:28px;">Este evento ha sido registrado</p>
+    </div>`;
+    overlayOcultar.style.display = 'flex';
+});
+
+window.addEventListener('unemi_meet_cerrado', () => {
+    if (!bloqueadoPorMeet) return;
+    bloqueadoPorMeet = false; screenShareBloqueado = false; contentHidden = false;
+    if (overlayOcultar) overlayOcultar.style.display = 'none';
+    registrarAcceso('meet_cerrado');
+    Swal.fire({ icon:'success', title:'✅ Aplicación cerrada', text:'Puedes continuar.', timer:3000, showConfirmButton:false, toast:true, position:'top-end' });
+});
+
+// ================================================================
 // CONFIGURACIÓN
 // ================================================================
 const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
@@ -271,26 +360,59 @@ onAuthStateChanged(auth, async (user) => {
             }
         }
 
+        // ── CONTROL DE DISPOSITIVOS ─────────────────────────────
+        let userData = null;
+        const esAdminUser = userEmail === ADMIN_EMAIL;
+
+        if (!esAdminUser) {
+            try {
+                const userDoc = await getDoc(doc(db, "usuarios_seguros", userEmail));
+                if (userDoc.exists()) userData = userDoc.data();
+            } catch(e) { console.warn('Error leyendo userData:', e); }
+
+            if (userData) {
+                const maxDisp = userData.max_dispositivos || 2;
+                const dispositivosActivos = userData.dispositivos || {};
+                const deviceId = getDeviceId();
+
+                if (!dispositivosActivos[deviceId]) {
+                    const cantActual = Object.keys(dispositivosActivos).length;
+                    if (cantActual >= maxDisp) {
+                        await Swal.fire({
+                            icon: 'error', title: 'Límite de dispositivos alcanzado',
+                            html: `Tu cuenta permite <strong>${maxDisp}</strong> dispositivo(s).<br>Ya tienes <strong>${cantActual}</strong> registrado(s).<br><br>Contacta al administrador para resetear tus dispositivos.`,
+                            confirmButtonColor: '#ea4335', confirmButtonText: 'Entendido'
+                        });
+                        signOut(auth); return;
+                    }
+                    const nuevosDisp = { ...dispositivosActivos };
+                    nuevosDisp[deviceId] = {
+                        registrado: new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }),
+                        userAgent: navigator.userAgent.substring(0, 100)
+                    };
+                    try { await updateDoc(doc(db, "usuarios_seguros", userEmail), { dispositivos: nuevosDisp }); }
+                    catch(e) { console.warn('No se pudo registrar dispositivo:', e); }
+                }
+            }
+        }
+
+        const maxDispFinal = userData?.max_dispositivos || 2;
         currentUserEmail = userEmail;
         currentUserName = user.displayName || userEmail;
         crearMarcaDeAgua(userEmail);
         crearOverlay();
         registrarAcceso('inicio_sesion');
 
-        // Mostrar pantalla principal
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('setup-screen').classList.remove('hidden');
         document.getElementById('user-display').classList.remove('hidden');
-        document.getElementById('user-info').innerText = `${currentUserName.toUpperCase()} (2 Disp.)`;
+        document.getElementById('user-info').innerText = currentUserName.split(' ')[0].toUpperCase();
 
-        // FIX #4: Rellenar tarjeta de bienvenida del HTML (estaba vacía)
         const welcomeName = document.getElementById('user-welcome-name');
         const welcomeSub = document.getElementById('user-welcome-sub');
         if (welcomeName) welcomeName.textContent = currentUserName.toUpperCase();
-        if (welcomeSub) welcomeSub.textContent = userEmail;
+        if (welcomeSub) welcomeSub.textContent = `${userEmail} · ${maxDispFinal} dispositivo${maxDispFinal !== 1 ? 's' : ''}`;
 
-        // Admin link
-        const esAdminUser = userEmail === ADMIN_EMAIL;
         if (esAdminUser) {
             adminLinkContainer.classList.remove('hidden');
             adminLinkContainer.style.display = 'block';
@@ -299,6 +421,7 @@ onAuthStateChanged(auth, async (user) => {
             adminLinkContainer.style.display = 'none';
         }
 
+        await verificarRequisitoExtension();
         cargarMaterias();
     } else {
         document.getElementById('auth-screen').classList.remove('hidden');
@@ -431,23 +554,29 @@ document.getElementById('btn-start').onclick = async () => {
         selectedAnswers = new Array(questions.length).fill(null);
 
         if (currentMode === "study") {
-            const saved = localStorage.getItem(`progreso_${currentMateria}`);
-            if (saved) {
+            let savedIndex = 0;
+            try {
+                const pd = await getDoc(doc(db, "progreso_estudio", `${currentUserEmail}_${currentMateria}`));
+                if (pd.exists()) savedIndex = pd.data().indice || 0;
+            } catch(e) {}
+            if (savedIndex > 0) {
                 const result = await Swal.fire({
                     title: 'Avance Detectado',
-                    text: '¿Deseas retomar lo avanzado o empezar desde la primera pregunta?',
+                    html: `Tienes <strong>${savedIndex} pregunta${savedIndex!==1?'s':''}</strong> completada${savedIndex!==1?'s':''} en esta materia.<br><small style="color:#888">Sincronizado entre todos tus dispositivos</small>`,
                     icon: 'question', showCancelButton: true,
                     confirmButtonText: 'Retomar avance', cancelButtonText: 'Empezar de cero'
                 });
-                currentIndex = result.isConfirmed ? parseInt(saved) : 0;
-            } else {
-                currentIndex = 0;
-            }
+                currentIndex = result.isConfirmed ? savedIndex : 0;
+                if (!result.isConfirmed) {
+                    try { await setDoc(doc(db, "progreso_estudio", `${currentUserEmail}_${currentMateria}`), { indice: 0, actualizado: serverTimestamp() }); } catch(e) {}
+                }
+            } else { currentIndex = 0; }
         } else {
             currentIndex = 0;
         }
 
         startTimer();
+        notificarExamenIniciado();
 
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('quiz-screen').classList.remove('hidden');
@@ -628,6 +757,7 @@ function selectAnswer(optionIndex) {
 
 // 6. FINALIZAR EXAMEN
 function finalizarExamen() {
+    notificarExamenTerminado();
     stopTimer();
 
     if (currentMode === "exam") {
@@ -661,7 +791,7 @@ function finalizarExamen() {
             text: 'Has terminado todas las preguntas de estudio.',
             confirmButtonColor: '#1a73e8'
         }).then(() => {
-            localStorage.removeItem(`progreso_${currentMateria}`);
+            try { await setDoc(doc(db, 'progreso_estudio', `${currentUserEmail}_${currentMateria}`), { indice: 0, actualizado: serverTimestamp() }); } catch(e) {}
             location.reload();
         });
     }
@@ -764,7 +894,11 @@ function stopTimer() {
 
 // 9. GUARDADO AUTOMÁTICO
 function guardarAvanceAutomatico() {
-    if (currentMode === "study") localStorage.setItem(`progreso_${currentMateria}`, currentIndex);
+    if (currentMode === "study" && currentUserEmail) {
+        setDoc(doc(db, "progreso_estudio", `${currentUserEmail}_${currentMateria}`), {
+            indice: currentIndex, materia: currentMateria, usuario: currentUserEmail, actualizado: serverTimestamp()
+        }).catch(e => console.warn("No se pudo guardar progreso:", e));
+    }
 }
 
 // 10. CERRAR SESIÓN
@@ -791,39 +925,22 @@ document.getElementById('btn-header-return').onclick = () => {
 // browserLocalPersistence garantiza que la sesión se guarda en
 // localStorage, no en cookies, evitando el bucle en GitHub Pages móvil.
 // ================================================================
-document.getElementById('btn-login').onclick = async () => {
-    const btnLogin = document.getElementById('btn-login');
-    btnLogin.disabled = true;
-    btnLogin.textContent = 'Conectando...';
-
-    try {
-        await signInWithPopup(auth, provider);
-        // onAuthStateChanged detecta el login y muestra el simulador
-    } catch (error) {
-        btnLogin.disabled = false;
-        btnLogin.textContent = 'Acceder con Google';
-
-        const cancelaciones = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'];
-        if (!cancelaciones.includes(error.code)) {
-            console.error('Error login:', error.code, error.message);
-
-            if (error.code === 'auth/popup-blocked') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Ventana bloqueada',
-                    html: 'Tu navegador bloqueó la ventana de Google.<br><br>' +
-                          'Toca <strong>"Permitir"</strong> cuando el navegador te lo pida, ' +
-                          'o activa los popups en la configuración del navegador.',
-                    confirmButtonColor: '#1a73e8',
-                    confirmButtonText: 'Intentar de nuevo'
-                });
-            } else {
-                Swal.fire({
-                    icon: 'error', title: 'Error al iniciar sesión',
-                    text: 'No se pudo conectar con Google. Verifica tu conexión e intenta de nuevo.',
-                    confirmButtonColor: '#1a73e8'
-                });
+document.getElementById('btn-login').onclick = () => {
+    const btn = document.getElementById('btn-login');
+    btn.disabled = true;
+    btn.textContent = 'Conectando...';
+    if (esMobil) {
+        signInWithRedirect(auth, provider).catch(err => {
+            btn.disabled = false; btn.textContent = 'Acceder con Google';
+            console.error('Error redirect:', err);
+            Swal.fire({ icon:'error', title:'Error al iniciar sesión', html:`Código: <code>${err.code}</code>`, confirmButtonText:'Entendido' });
+        });
+    } else {
+        signInWithPopup(auth, provider).catch(err => {
+            btn.disabled = false; btn.textContent = 'Acceder con Google';
+            if (!['auth/popup-closed-by-user','auth/cancelled-popup-request'].includes(err.code)) {
+                Swal.fire({ icon:'error', title:'Error al iniciar sesión', html:`Código: <code>${err.code}</code>`, confirmButtonText:'Entendido' });
             }
-        }
+        });
     }
 };
