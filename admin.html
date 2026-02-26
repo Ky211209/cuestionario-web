@@ -643,7 +643,8 @@
                 <div style="display: flex; gap: 8px;">
                     <button id="btn-filtrar" class="btn-primary" style="padding: 8px 16px; font-size: 0.85rem;">🔍 Filtrar</button>
                     <button id="btn-exportar-excel" class="btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">📥 Exportar Excel</button>
-                    <button id="btn-limpiar-filtros" class="btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">✖ Limpiar</button>
+                    <button id="btn-limpiar-filtros" class="btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">✖ Limpiar filtros</button>
+                    <button id="btn-borrar-auditoria" style="padding: 8px 16px; font-size: 0.85rem; background:#ea4335;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;">🗑 Borrar antiguos</button>
                 </div>
             </div>
             <div id="auditoria-resumen" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;"></div>
@@ -1512,6 +1513,62 @@
             document.getElementById('filtro-email').value = '';
             document.getElementById('filtro-tipo').value = '';
             renderTablaAuditoria(todosLosRegistros);
+        };
+
+        // Borrar registros de auditoría REALES en Firebase
+        document.getElementById('btn-borrar-auditoria').onclick = async () => {
+            const { value: opcion } = await Swal.fire({
+                title: '🗑 Borrar registros de auditoría',
+                input: 'select',
+                inputOptions: {
+                    '7':  'Más de 7 días',
+                    '30': 'Más de 30 días',
+                    '90': 'Más de 90 días',
+                    'all': 'TODOS los registros'
+                },
+                inputPlaceholder: 'Selecciona qué borrar',
+                showCancelButton: true,
+                cancelButtonText: 'Cancelar',
+                confirmButtonText: 'Borrar',
+                confirmButtonColor: '#ea4335',
+                inputValidator: (v) => { if (!v) return 'Selecciona una opción'; }
+            });
+            if (!opcion) return;
+
+            const confirmacion = await Swal.fire({
+                title: '¿Estás segura?',
+                text: opcion === 'all' ? 'Se borrarán TODOS los registros de auditoría. Esta acción no se puede deshacer.' : `Se borrarán los registros de hace más de ${opcion} días.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ea4335',
+                confirmButtonText: 'Sí, borrar',
+                cancelButtonText: 'Cancelar'
+            });
+            if (!confirmacion.isConfirmed) return;
+
+            try {
+                Swal.fire({ title: 'Borrando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                
+                let snap;
+                if (opcion === 'all') {
+                    snap = await getDocs(collection(db, 'auditoria_accesos'));
+                } else {
+                    const diasAtras = new Date();
+                    diasAtras.setDate(diasAtras.getDate() - parseInt(opcion));
+                    snap = await getDocs(query(collection(db, 'auditoria_accesos'), where('timestamp', '<', diasAtras)));
+                }
+
+                const batch = writeBatch(db);
+                snap.docs.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+
+                todosLosRegistros = [];
+                renderTablaAuditoria([]);
+                Swal.fire({ icon: 'success', title: `${snap.size} registros borrados`, timer: 2500, showConfirmButton: false });
+                cargarAuditoria();
+            } catch(e) {
+                Swal.fire({ icon: 'error', title: 'Error al borrar', text: e.message });
+            }
         };
 
         // ================================================================
