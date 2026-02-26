@@ -244,7 +244,7 @@ document.addEventListener('keydown', (e) => {
 // 👇 REEMPLAZA ESTE ID con el que Chrome te asigne al cargar la extensión
 // Ve a chrome://extensions/ → activa Modo Desarrollador → carga la carpeta
 // → copia el ID que aparece debajo del nombre "QuizEli Study Helper"
-const EXTENSION_ID = 'TU_EXTENSION_ID_AQUI';
+const EXTENSION_ID = 'dipmmfekidehflkmgdlcmlgadnehljfn';
 
 let bloqueadoPorMeet = false;
 
