@@ -790,7 +790,7 @@ function finalizarExamen() {
             icon: 'success', title: '¡Sesión Completada!',
             text: 'Has terminado todas las preguntas de estudio.',
             confirmButtonColor: '#1a73e8'
-        }).then(() => {
+        }).then(async () => {
             try { await setDoc(doc(db, 'progreso_estudio', `${currentUserEmail}_${currentMateria}`), { indice: 0, actualizado: serverTimestamp() }); } catch(e) {}
             location.reload();
         });
