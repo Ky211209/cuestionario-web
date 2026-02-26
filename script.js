@@ -260,9 +260,18 @@ async function verificarExtension() {
     });
 }
 
+async function verificarExtensionConReintentos(intentos = 3, espera = 1000) {
+    for (let i = 0; i < intentos; i++) {
+        const ok = await verificarExtension();
+        if (ok) return true;
+        if (i < intentos - 1) await new Promise(r => setTimeout(r, espera));
+    }
+    return false;
+}
+
 async function verificarRequisitoExtension() {
     if (esMobil) return;
-    const instalada = await verificarExtension();
+    const instalada = await verificarExtensionConReintentos();
     if (!instalada) {
         document.getElementById('setup-screen').classList.add('hidden');
         const bloq = document.createElement('div');
