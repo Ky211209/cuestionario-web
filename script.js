@@ -270,24 +270,46 @@ async function verificarExtensionConReintentos(intentos = 3, espera = 1000) {
 }
 
 let extensionYaVerificada = false;
+
+function mostrarPantallaExtensionRequerida() {
+    const existente = document.getElementById('bloqueo-extension');
+    if (existente) return;
+    document.getElementById('setup-screen').classList.add('hidden');
+    const bloq = document.createElement('div');
+    bloq.id = 'bloqueo-extension';
+    bloq.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#f0f2f5;z-index:99999;display:flex;justify-content:center;align-items:center;padding:30px;';
+    bloq.innerHTML = `<div style="background:white;border-radius:16px;padding:40px;max-width:460px;box-shadow:0 8px 30px rgba(0,0,0,0.12);text-align:center;">
+        <div style="font-size:3.5rem;margin-bottom:16px;">📚</div>
+        <h2 style="color:#1a73e8;margin-bottom:12px;">QuizEli Study Helper Requerido</h2>
+        <p style="color:#555;font-size:0.95rem;line-height:1.6;margin-bottom:24px;">Para usar el Simulador QuizEli necesitas el asistente oficial instalado en Chrome.</p>
+        <button id="btn-reverificar" style="background:#1a73e8;color:white;border:none;padding:12px 24px;border-radius:50px;font-size:0.95rem;cursor:pointer;font-weight:600;">Ya lo instalé, verificar de nuevo</button>
+    </div>`;
+    document.body.appendChild(bloq);
+    document.getElementById('btn-reverificar').onclick = async () => {
+        const btn = document.getElementById('btn-reverificar');
+        btn.textContent = 'Verificando...';
+        btn.disabled = true;
+        const ok = await verificarExtensionConReintentos(3, 500);
+        if (ok) {
+            bloq.remove();
+            document.getElementById('setup-screen').classList.remove('hidden');
+            extensionYaVerificada = true;
+        } else {
+            btn.textContent = 'No se detectó. Intentar de nuevo';
+            btn.disabled = false;
+        }
+    };
+}
+
 async function verificarRequisitoExtension() {
     if (extensionYaVerificada) return;
-    extensionYaVerificada = true;
-    if (esMobil) return;
+    if (esMobil) { extensionYaVerificada = true; return; }
     const instalada = await verificarExtensionConReintentos();
     if (!instalada) {
-        document.getElementById('setup-screen').classList.add('hidden');
-        const bloq = document.createElement('div');
-        bloq.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#f0f2f5;z-index:99999;display:flex;justify-content:center;align-items:center;padding:30px;';
-        bloq.innerHTML = `<div style="background:white;border-radius:16px;padding:40px;max-width:460px;box-shadow:0 8px 30px rgba(0,0,0,0.12);text-align:center;">
-            <div style="font-size:3.5rem;margin-bottom:16px;">📚</div>
-            <h2 style="color:#1a73e8;margin-bottom:12px;">QuizEli Study Helper Requerido</h2>
-            <p style="color:#555;font-size:0.95rem;line-height:1.6;margin-bottom:24px;">Para usar el Simulador QuizEli necesitas el asistente oficial instalado en Chrome.</p>
-            <button onclick="location.reload()" style="background:none;border:none;color:#888;font-size:0.85rem;cursor:pointer;text-decoration:underline;margin-top:8px;">Ya lo instalé, verificar de nuevo</button>
-        </div>`;
-        document.body.appendChild(bloq);
+        mostrarPantallaExtensionRequerida();
         return;
     }
+    extensionYaVerificada = true;
 }
 
 function notificarExamenIniciado() {
