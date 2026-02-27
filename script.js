@@ -250,6 +250,9 @@ let bloqueadoPorMeet = false;
 
 async function verificarExtension() {
     return new Promise((resolve) => {
+        // Método 1: variable inyectada por content.js
+        if (window.__quizeli_extension_activa === true) return resolve(true);
+        // Método 2: sendMessage directo
         try {
             if (typeof chrome === 'undefined' || !chrome.runtime) return resolve(false);
             chrome.runtime.sendMessage(EXTENSION_ID, { tipo: 'PING' }, (response) => {
@@ -260,7 +263,7 @@ async function verificarExtension() {
     });
 }
 
-async function verificarExtensionConReintentos(intentos = 3, espera = 1000) {
+async function verificarExtensionConReintentos(intentos = 5, espera = 800) {
     for (let i = 0; i < intentos; i++) {
         const ok = await verificarExtension();
         if (ok) return true;
