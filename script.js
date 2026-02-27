@@ -269,7 +269,10 @@ async function verificarExtensionConReintentos(intentos = 3, espera = 1000) {
     return false;
 }
 
+let extensionYaVerificada = false;
 async function verificarRequisitoExtension() {
+    if (extensionYaVerificada) return;
+    extensionYaVerificada = true;
     if (esMobil) return;
     const instalada = await verificarExtensionConReintentos();
     if (!instalada) {
