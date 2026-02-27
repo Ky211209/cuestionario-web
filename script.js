@@ -256,9 +256,7 @@ const EXTENSION_ID = 'dipmmfekidehflkmgdlcmlgadnehljfn';
 let bloqueadoPorMeet = false;
 
 function verificarExtension() {
-    // Método 1: variable inyectada por content.js en el DOM
-    if (window.__quizeli_extension_activa === true) return true;
-    // Método 2: localStorage escrito por content.js
+    // Leer localStorage escrito por content.js
     try {
         const val = localStorage.getItem('__quizeli_ext_ok');
         if (val === 'true') return true;
