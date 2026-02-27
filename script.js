@@ -195,7 +195,9 @@ if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
 
 // ── EVENTOS DE FOCO / PESTAÑA ─────────────────────────────────────────────────
 document.addEventListener('visibilitychange', () => {
-    if (!extensionYaVerificada) return; // No bloquear si aún no se verificó la extensión
+    if (!extensionYaVerificada) return;
+    const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
+    if (!quizVisible) return;
     if (document.hidden) {
         mostrarOverlayBloqueador('cambio_pestaña', false);
     } else {
@@ -205,7 +207,11 @@ document.addEventListener('visibilitychange', () => {
 
 // FIX CRÍTICO #3: En móvil, el blur se dispara al abrir teclado virtual → NO usar en móvil
 if (!esMobil) {
-    window.addEventListener('blur', () => { if (extensionYaVerificada) mostrarOverlayBloqueador('ventana_minimizada', false); });
+    window.addEventListener('blur', () => {
+        if (!extensionYaVerificada) return;
+        const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
+        if (quizVisible) mostrarOverlayBloqueador('ventana_minimizada', false);
+    });
     window.addEventListener('focus', () => ocultarOverlay());
 }
 
@@ -249,26 +255,21 @@ const EXTENSION_ID = 'dipmmfekidehflkmgdlcmlgadnehljfn';
 
 let bloqueadoPorMeet = false;
 
-async function verificarExtension() {
-    return new Promise((resolve) => {
-        // Método 1: variable inyectada por content.js
-        if (window.__quizeli_extension_activa === true) return resolve(true);
-        // Método 2: sendMessage directo
-        try {
-            if (typeof chrome === 'undefined' || !chrome.runtime) return resolve(false);
-            chrome.runtime.sendMessage(EXTENSION_ID, { tipo: 'PING' }, (response) => {
-                if (chrome.runtime.lastError || !response) return resolve(false);
-                resolve(response.instalada === true);
-            });
-        } catch(e) { resolve(false); }
-    });
+function verificarExtension() {
+    // Método 1: variable inyectada por content.js en el DOM
+    if (window.__quizeli_extension_activa === true) return true;
+    // Método 2: localStorage escrito por content.js
+    try {
+        const val = localStorage.getItem('__quizeli_ext_ok');
+        if (val === 'true') return true;
+    } catch(e) {}
+    return false;
 }
 
-async function verificarExtensionConReintentos(intentos = 5, espera = 800) {
+async function verificarExtensionConReintentos(intentos = 5, espera = 600) {
     for (let i = 0; i < intentos; i++) {
-        const ok = await verificarExtension();
-        if (ok) return true;
-        if (i < intentos - 1) await new Promise(r => setTimeout(r, espera));
+        if (verificarExtension()) return true;
+        await new Promise(r => setTimeout(r, espera));
     }
     return false;
 }
