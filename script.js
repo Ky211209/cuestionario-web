@@ -195,6 +195,7 @@ if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
 
 // ── EVENTOS DE FOCO / PESTAÑA ─────────────────────────────────────────────────
 document.addEventListener('visibilitychange', () => {
+    if (!extensionYaVerificada) return; // No bloquear si aún no se verificó la extensión
     if (document.hidden) {
         mostrarOverlayBloqueador('cambio_pestaña', false);
     } else {
@@ -204,7 +205,7 @@ document.addEventListener('visibilitychange', () => {
 
 // FIX CRÍTICO #3: En móvil, el blur se dispara al abrir teclado virtual → NO usar en móvil
 if (!esMobil) {
-    window.addEventListener('blur', () => mostrarOverlayBloqueador('ventana_minimizada', false));
+    window.addEventListener('blur', () => { if (extensionYaVerificada) mostrarOverlayBloqueador('ventana_minimizada', false); });
     window.addEventListener('focus', () => ocultarOverlay());
 }
 
@@ -297,6 +298,7 @@ function mostrarPantallaExtensionRequerida() {
             bloq.remove();
             document.getElementById('setup-screen').classList.remove('hidden');
             extensionYaVerificada = true;
+            cargarMaterias();
         } else {
             btn.textContent = 'No se detectó. Intentar de nuevo';
             btn.disabled = false;
@@ -313,6 +315,7 @@ async function verificarRequisitoExtension() {
         return;
     }
     extensionYaVerificada = true;
+    cargarMaterias();
 }
 
 function notificarExamenIniciado() {
@@ -459,7 +462,6 @@ onAuthStateChanged(auth, async (user) => {
         }
 
         await verificarRequisitoExtension();
-        cargarMaterias();
     } else {
         document.getElementById('auth-screen').classList.remove('hidden');
         document.getElementById('setup-screen').classList.add('hidden');
