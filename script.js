@@ -328,7 +328,8 @@ window.addEventListener('unemi_meet_detectado', (e) => {
     if (bloqueadoPorMeet) return;
     bloqueadoPorMeet = true;
     const plataforma = e.detail?.plataforma || '';
-    const nombre = plataforma.includes('meet.google') ? 'Google Meet' : plataforma.includes('zoom') ? 'Zoom' : plataforma.includes('teams') ? 'Microsoft Teams' : plataforma.includes('discord') ? 'Discord' : 'videoconferencia';
+    // Usar el campo nombre si viene del nuevo content.js, sino calcularlo
+    const nombre = e.detail?.nombre || (plataforma.includes('meet.google') ? 'Google Meet' : plataforma.includes('zoom') ? 'Zoom' : plataforma.includes('teams') ? 'Microsoft Teams' : plataforma.includes('discord') ? 'Discord' : 'videoconferencia');
     registrarAcceso('meet_detectado', { plataforma: nombre });
     if (!overlayOcultar) return;
     const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
@@ -621,6 +622,40 @@ document.getElementById('btn-start').onclick = async () => {
         document.getElementById('btn-header-return').classList.add('hidden');
 
         renderQuestion();
+
+        // FIX: verificar proactivamente si Meet ya está abierto ANTES de que iniciara el examen
+        // La extensión lo hace en background, pero también lo verificamos desde aquí por seguridad
+        setTimeout(() => {
+            try {
+                if (typeof chrome !== 'undefined' && chrome.runtime) {
+                    chrome.runtime.sendMessage(EXTENSION_ID, { tipo: 'VERIFICAR_MEET' }, (response) => {
+                        if (chrome.runtime.lastError || !response) return;
+                        if (response.meetAbierto && !bloqueadoPorMeet) {
+                            bloqueadoPorMeet = true;
+                            const nombre = response.nombre || (response.plataforma?.includes('meet.google') ? 'Google Meet'
+                                : response.plataforma?.includes('zoom') ? 'Zoom'
+                                : response.plataforma?.includes('teams') ? 'Microsoft Teams'
+                                : 'Videoconferencia');
+                            registrarAcceso('meet_detectado_al_iniciar', { plataforma: nombre });
+                            if (overlayOcultar) {
+                                contentHidden = true;
+                                overlayOcultar.innerHTML = `<div style="max-width:480px;padding:40px;text-align:center;">
+                                    <div style="font-size:4rem;margin-bottom:20px;">🔴</div>
+                                    <p style="color:#ff4444;font-size:1.8rem;font-weight:900;margin-bottom:16px;">${nombre.toUpperCase()} DETECTADO</p>
+                                    <p style="color:#aaa;font-size:1rem;line-height:1.7;margin-bottom:28px;">Tienes <strong>${nombre}</strong> abierto. Las preguntas están ocultas hasta que cierres la aplicación.</p>
+                                    <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:12px;padding:16px 24px;display:inline-block;">
+                                        <p style="color:#facc15;font-size:1.1rem;font-weight:700;margin:0;">${currentUserName}</p>
+                                        <p style="color:#aaa;font-size:0.85rem;margin:4px 0 0;">${currentUserEmail}</p>
+                                    </div>
+                                    <p style="color:#555;font-size:0.8rem;margin-top:28px;">Este evento ha sido registrado</p>
+                                </div>`;
+                                overlayOcultar.style.display = 'flex';
+                            }
+                        }
+                    });
+                }
+            } catch(e) {}
+        }, 800); // pequeño delay para asegurar que background procesó EXAMEN_INICIADO
 
     } catch (error) {
         console.error('Error cargando preguntas:', error);
