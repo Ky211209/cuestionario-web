@@ -162,9 +162,9 @@
             background: #fafafa;
         }
         .opcion-mini.correcta {
-            border-left-color: #34a853;
-            background: #e8f5ec;
-            color: #1e7e34;
+            border-left-color: #155eef;
+            background: linear-gradient(135deg, #1a73e8, #155eef);
+            color: #ffffff;
             font-weight: 600;
         }
 
@@ -193,10 +193,10 @@
             align-items: center;
             gap: 5px;
         }
-        .btn-editar { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
-        .btn-editar:hover { background: #ffc107; color: white; }
-        .btn-eliminar { background: #fce8e6; color: #c5221f; border: 1px solid #ea4335; }
-        .btn-eliminar:hover { background: #ea4335; color: white; }
+        .btn-editar { background: linear-gradient(135deg, #1a73e8, #155eef); color: #ffffff; border: none; box-shadow: 0 2px 6px rgba(26,115,232,0.3); }
+        .btn-editar:hover { background: linear-gradient(135deg, #155eef, #0d47b8); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(26,115,232,0.4); }
+        .btn-eliminar { background: linear-gradient(135deg, #1aa260, #128a4f); color: #ffffff; border: none; box-shadow: 0 2px 6px rgba(26,162,96,0.3); }
+        .btn-eliminar:hover { background: linear-gradient(135deg, #128a4f, #0c6f3e); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(26,162,96,0.4); }
 
         /* ---- PAGINACIÓN ---- */
         .paginacion {
@@ -750,6 +750,14 @@
                 <textarea id="modal-texto" rows="3" placeholder="Escribe aquí la pregunta..."></textarea>
             </div>
 
+            <!-- IMAGEN DE LA PREGUNTA (OPCIONAL) -->
+            <div class="form-group">
+                <label><i class="fas fa-image"></i> Imagen de la pregunta (opcional)</label>
+                <input type="url" id="modal-imagen-url" placeholder="https://... (enlace público de la imagen)">
+                <p style="font-size:0.75rem;color:#888;margin-top:4px;">Pega un enlace público (Google Drive, Imgur, etc). Se mostrará arriba del enunciado en el simulador.</p>
+                <img id="modal-imagen-preview" src="" style="display:none;max-width:100%;max-height:160px;border-radius:8px;margin-top:8px;border:1px solid #e0e0e0;object-fit:contain;">
+            </div>
+
             <!-- OPCIONES -->
             <div class="form-group">
                 <label><i class="fas fa-list"></i> Opciones de Respuesta</label>
@@ -1014,7 +1022,7 @@
                     <tr>
                         <td><div class="num-badge">${num}</div></td>
                         <td class="td-pregunta">
-                            <div class="pregunta-texto">${escapeHtml(p.texto || '')}</div>
+                            <div class="pregunta-texto">${escapeHtml(p.texto || '')}${p.imagen_url ? ' <span title="Tiene imagen" style="display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,#1a73e8,#155eef);color:white;font-size:0.68rem;padding:2px 7px;border-radius:10px;font-weight:600;vertical-align:middle;"><i class=\'fas fa-image\'></i> IMG</span>' : ''}</div>
                             <div class="opciones-mini">${opcionesHtml}</div>
                         </td>
                         <td class="td-explicacion">
@@ -1092,6 +1100,9 @@
             document.getElementById('modal-op2').value = '';
             document.getElementById('modal-op3').value = '';
             document.getElementById('modal-explicacion').value = '';
+            document.getElementById('modal-imagen-url').value = '';
+            const prev = document.getElementById('modal-imagen-preview');
+            prev.src = ''; prev.style.display = 'none';
             respuestaSeleccionada = -1;
             document.querySelectorAll('.respuesta-opcion').forEach(el => el.classList.remove('seleccionada'));
             // Preseleccionar materia actual si hay una
@@ -1115,6 +1126,20 @@
             if (e.target === e.currentTarget) cerrarModal();
         });
 
+        // Preview en vivo de imagen
+        document.getElementById('modal-imagen-url').addEventListener('input', (e) => {
+            const url = e.target.value.trim();
+            const prev = document.getElementById('modal-imagen-preview');
+            if (url) {
+                prev.src = url;
+                prev.style.display = 'block';
+                prev.onerror = () => { prev.style.display = 'none'; };
+            } else {
+                prev.src = '';
+                prev.style.display = 'none';
+            }
+        });
+
         // ── EDITAR PREGUNTA ─────────────────────────────────────────────
         window.editarPregunta = (docId) => {
             const p = todasLasPreguntas.find(x => x.id === docId);
@@ -1128,6 +1153,10 @@
                 document.getElementById(id).value = opciones[i] || '';
             });
             document.getElementById('modal-explicacion').value = p.explicacion_correcta || '';
+            const imgUrl = p.imagen_url || '';
+            document.getElementById('modal-imagen-url').value = imgUrl;
+            const prev = document.getElementById('modal-imagen-preview');
+            if (imgUrl) { prev.src = imgUrl; prev.style.display = 'block'; } else { prev.src = ''; prev.style.display = 'none'; }
 
             const resp = parseInt(p.respuesta ?? -1);
             if (resp >= 0) {
@@ -1169,6 +1198,7 @@
             const op2 = document.getElementById('modal-op2').value.trim();
             const op3 = document.getElementById('modal-op3').value.trim();
             const explicacion = document.getElementById('modal-explicacion').value.trim();
+            const imagenUrl = document.getElementById('modal-imagen-url').value.trim();
             const docId = document.getElementById('modal-doc-id').value;
 
             // Validar
@@ -1180,7 +1210,8 @@
                 texto,
                 opciones: [op0, op1, op2, op3],
                 respuesta: respuestaSeleccionada,
-                explicacion_correcta: explicacion || 'Consulte el material de estudio oficial.'
+                explicacion_correcta: explicacion || 'Consulte el material de estudio oficial.',
+                ...(imagenUrl ? { imagen_url: imagenUrl } : {})
             };
 
             const btn = document.getElementById('btn-guardar-pregunta');
@@ -1274,7 +1305,10 @@
                     let ref;
                     if (!snap.empty) { ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, snap.docs[0].id); actualizadas++; }
                     else { ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`); nuevas++; }
-                    batch.set(ref, { texto: p.texto.trim(), opciones: [p.opcion_0.toString().trim(), p.opcion_1.toString().trim(), p.opcion_2.toString().trim(), p.opcion_3.toString().trim()], respuesta: parseInt(p.respuesta), explicacion_correcta: p.explicacion ? p.explicacion.toString().trim() : "Consulte el material de estudio oficial." });
+                    const imgUrlExcel = p.imagen_url ? p.imagen_url.toString().trim() : '';
+                    const datosExcel = { texto: p.texto.trim(), opciones: [p.opcion_0.toString().trim(), p.opcion_1.toString().trim(), p.opcion_2.toString().trim(), p.opcion_3.toString().trim()], respuesta: parseInt(p.respuesta), explicacion_correcta: p.explicacion ? p.explicacion.toString().trim() : "Consulte el material de estudio oficial." };
+                    if (imgUrlExcel) datosExcel.imagen_url = imgUrlExcel;
+                    batch.set(ref, datosExcel);
                 }
                 await batch.commit();
                 Swal.fire('Proceso Terminado', `Preguntas Nuevas: ${nuevas}<br>Preguntas Actualizadas: ${actualizadas}`, 'success');
@@ -1638,7 +1672,7 @@
                 const fecha = new Date().toLocaleDateString('es-EC', { year:'numeric', month:'long', day:'numeric' });
 
                 const etiquetaModo = soloCorrecta
-                    ? '<div style="margin-top:10px;background:#e6f4ea;color:#1e7e34;padding:6px 14px;border-radius:20px;font-size:0.78rem;display:inline-block;font-weight:600;">🎯 SOLO RESPUESTA CORRECTA</div>'
+                    ? '<div style="margin-top:10px;background:linear-gradient(135deg,#1a73e8,#155eef);color:#ffffff;padding:6px 14px;border-radius:20px;font-size:0.78rem;display:inline-block;font-weight:600;">🎯 SOLO RESPUESTA CORRECTA</div>'
                     : !mostrarResp
                         ? '<div style="margin-top:10px;background:#fff3cd;color:#856404;padding:6px 14px;border-radius:20px;font-size:0.78rem;display:inline-block;font-weight:600;">⚠ MODO EXAMEN · Sin respuestas marcadas</div>'
                         : '';
@@ -1666,18 +1700,18 @@
                     if (soloCorrecta) {
                         // Modo "solo respuesta correcta": mostrar únicamente la opción correcta
                         const textoCorrecta = opciones[correcta] || '';
-                        html += `<div style="display:flex;align-items:center;gap:8px;margin-left:6px;padding:8px 12px;border-radius:6px;background:#e6f4ea;border:1.5px solid #34a853;">
-                            <span style="background:#34a853;color:white;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;flex-shrink:0;">${letrasOpc[correcta]}</span>
+                        html += `<div style="display:flex;align-items:center;gap:8px;margin-left:6px;padding:8px 12px;border-radius:6px;background:linear-gradient(135deg,#1a73e8,#155eef);border:1.5px solid #155eef;">
+                            <span style="background:rgba(255,255,255,0.25);color:white;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;flex-shrink:0;">${letrasOpc[correcta]}</span>
                             <span style="color:#1e7e34;font-weight:700;font-size:0.9rem;">${escapeHtml(textoCorrecta)}</span>
-                            <span style="margin-left:auto;color:#34a853;font-size:1rem;">✓</span>
+                            <span style="margin-left:auto;color:#ffffff;font-size:1rem;">✓</span>
                         </div>`;
                     } else {
                         // Modo "todas las opciones" (con o sin resaltado)
                         html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-left:6px;">`;
                         opciones.forEach((op, oi) => {
                             const esCorrecta = mostrarResp && oi === correcta;
-                            html += `<div style="padding:6px 10px;border-radius:6px;font-size:0.85rem;border:1.5px solid ${esCorrecta?'#34a853':'#e0e0e0'};background:${esCorrecta?'#e6f4ea':'white'};color:${esCorrecta?'#1e7e34':'#444'};font-weight:${esCorrecta?'700':'400'};display:flex;align-items:center;gap:7px;">
-                                <span style="background:${esCorrecta?'#34a853':'#e8f0fe'};color:${esCorrecta?'white':'#1a73e8'};width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:800;flex-shrink:0;">${letrasOpc[oi]}</span>
+                            html += `<div style="padding:6px 10px;border-radius:6px;font-size:0.85rem;border:1.5px solid ${esCorrecta?'#155eef':'#e0e0e0'};background:${esCorrecta?'linear-gradient(135deg,#1a73e8,#155eef)':'white'};color:${esCorrecta?'#ffffff':'#444'};font-weight:${esCorrecta?'700':'400'};display:flex;align-items:center;gap:7px;">
+                                <span style="background:${esCorrecta?'rgba(255,255,255,0.25)':'#e8f0fe'};color:${esCorrecta?'#ffffff':'#1a73e8'};width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:800;flex-shrink:0;">${letrasOpc[oi]}</span>
                                 ${escapeHtml(op)}
                                 ${esCorrecta?'<span style="margin-left:auto;font-size:1rem;">✓</span>':''}
                             </div>`;
