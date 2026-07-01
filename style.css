@@ -139,8 +139,10 @@ header {
 table { width: 100%; border-collapse: collapse; margin-top: 20px; text-align: left; }
 th, td { padding: 12px; border-bottom: 1px solid #eee; font-size: 0.85rem; }
 th { color: #1a73e8; background: #f8f9fa; text-transform: uppercase; }
-.btn-edit { background: #fbbc04; padding: 6px; border-radius: 4px; border: none; cursor: pointer; margin-right: 5px; }
-.btn-delete { background: #ea4335; color: white; padding: 6px; border-radius: 4px; border: none; cursor: pointer; }
+.btn-edit { background: linear-gradient(135deg, #1a73e8, #155eef); color: #ffffff; padding: 6px 10px; border-radius: 6px; border: none; cursor: pointer; margin-right: 5px; box-shadow: 0 2px 6px rgba(26,115,232,0.3); }
+.btn-edit:hover { background: linear-gradient(135deg, #155eef, #0d47b8); }
+.btn-delete { background: linear-gradient(135deg, #1aa260, #128a4f); color: white; padding: 6px 10px; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 2px 6px rgba(26,162,96,0.3); }
+.btn-delete:hover { background: linear-gradient(135deg, #128a4f, #0c6f3e); }
 
 /* OPCIONES DE PREGUNTAS */
 #options-container { display: flex; flex-direction: column; gap: 12px; }
@@ -185,13 +187,15 @@ th { color: #1a73e8; background: #f8f9fa; text-transform: uppercase; }
 }
 
 .option-button.correct {
-    background: #e6f4ea;
-    border-color: #34a853;
+    background: linear-gradient(135deg, #1a73e8, #155eef);
+    border-color: #155eef;
+    color: #ffffff;
     animation: correctPulse 0.5s ease;
 }
 
 .option-button.correct .option-letter {
-    background: #34a853;
+    background: #ffffff;
+    color: #155eef;
 }
 
 .option-button.incorrect {
