@@ -682,7 +682,19 @@ function renderQuestion() {
     insertarMarcaEnPregunta(currentUserEmail);
 
     const preguntaTexto = question.texto || question.explicacion || question.pregunta || 'Pregunta sin texto';
-    questionText.textContent = `${currentIndex + 1}. ${preguntaTexto}`;
+
+    // Imagen de la pregunta (si existe)
+    if (question.imagen_url) {
+        questionText.innerHTML = `
+            <img src="${question.imagen_url}" 
+                 alt="Imagen de la pregunta"
+                 style="width:100%;max-height:280px;object-fit:contain;border-radius:8px;margin-bottom:14px;border:1px solid #e0e0e0;display:block;"
+                 onerror="this.style.display='none'">
+            <span>${currentIndex + 1}. ${preguntaTexto}</span>
+        `;
+    } else {
+        questionText.textContent = `${currentIndex + 1}. ${preguntaTexto}`;
+    }
     optionsContainer.innerHTML = '';
 
     // Botón volver al menú
@@ -891,12 +903,12 @@ function mostrarResultadosDetallados(correctas) {
         const isCorrect = userAnswer === q.respuesta;
         const resultCard = document.createElement('div');
         resultCard.style.cssText = `
-            background:${isCorrect ? '#e6f4ea' : '#fce8e6'};padding:15px;border-radius:8px;
-            margin-bottom:15px;text-align:left;border-left:4px solid ${isCorrect ? '#34a853' : '#ea4335'};
+            background:${isCorrect ? 'linear-gradient(135deg, #1a73e8, #155eef)' : '#fce8e6'};color:${isCorrect ? '#ffffff' : '#333'};padding:15px;border-radius:8px;
+            margin-bottom:15px;text-align:left;border-left:4px solid ${isCorrect ? '#155eef' : '#ea4335'};
         `;
         resultCard.innerHTML = `
             <p style="font-weight:bold;margin-bottom:8px;">${idx + 1}. ${q.texto || q.explicacion || q.pregunta || 'Sin texto'}</p>
-            <p style="color:#666;font-size:0.9rem;">
+            <p style="${isCorrect ? 'color:rgba(255,255,255,0.85);' : 'color:#666;'}font-size:0.9rem;">
                 Tu respuesta: <strong>${userAnswer !== null ? String.fromCharCode(65 + userAnswer) : 'Sin responder'}</strong><br>
                 Respuesta correcta: <strong>${String.fromCharCode(65 + q.respuesta)}</strong>
             </p>
