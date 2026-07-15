@@ -1024,12 +1024,24 @@
                     </div>
                 `).join('');
 
+                const miniaturaHtml = p.imagen_url
+                    ? `<img src="${p.imagen_url}" alt="Miniatura" title="Clic para ampliar"
+                        style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:1.5px solid #1a73e8;cursor:zoom-in;flex-shrink:0;"
+                        onerror="this.style.display='none'"
+                        onclick="window.ampliarMiniatura('${p.imagen_url}')">`
+                    : '';
+
                 html += `
                     <tr>
                         <td><div class="num-badge">${num}</div></td>
                         <td class="td-pregunta">
-                            <div class="pregunta-texto">${escapeHtml(p.texto || '')}${p.imagen_url ? ' <span title="Tiene imagen" style="display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,#1a73e8,#155eef);color:white;font-size:0.68rem;padding:2px 7px;border-radius:10px;font-weight:600;vertical-align:middle;"><i class=\'fas fa-image\'></i> IMG</span>' : ''}${esMultiple ? ' <span title="Selección múltiple" style="display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,#34a853,#128a4f);color:white;font-size:0.68rem;padding:2px 7px;border-radius:10px;font-weight:600;vertical-align:middle;"><i class=\'fas fa-check-double\'></i> MÚLTIPLE</span>' : ''}</div>
-                            <div class="opciones-mini">${opcionesHtml}</div>
+                            <div style="display:flex; gap:10px; align-items:flex-start;">
+                                ${miniaturaHtml}
+                                <div style="min-width:0;">
+                                    <div class="pregunta-texto">${escapeHtml(p.texto || '')}${p.imagen_url ? ' <span title="Tiene imagen" style="display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,#1a73e8,#155eef);color:white;font-size:0.68rem;padding:2px 7px;border-radius:10px;font-weight:600;vertical-align:middle;"><i class=\'fas fa-image\'></i> IMG</span>' : ''}${esMultiple ? ' <span title="Selección múltiple" style="display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,#34a853,#128a4f);color:white;font-size:0.68rem;padding:2px 7px;border-radius:10px;font-weight:600;vertical-align:middle;"><i class=\'fas fa-check-double\'></i> MÚLTIPLE</span>' : ''}</div>
+                                    <div class="opciones-mini">${opcionesHtml}</div>
+                                </div>
+                            </div>
                         </td>
                         <td class="td-explicacion">
                             <div class="explicacion-preview">${escapeHtml(p.explicacion_correcta || '—')}</div>
@@ -1261,6 +1273,29 @@
         };
 
         // ── UTILIDADES ──────────────────────────────────────────────────
+        // ── AMPLIAR MINIATURA (lightbox simple) ─────────────────────────
+        window.ampliarMiniatura = (url) => {
+            let overlay = document.getElementById('admin-image-zoom-overlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'admin-image-zoom-overlay';
+                overlay.style.cssText = `
+                    display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+                    background:rgba(0,0,0,0.82); z-index:99990; justify-content:center;
+                    align-items:center; padding:30px; cursor:zoom-out;
+                `;
+                const img = document.createElement('img');
+                img.id = 'admin-image-zoom-content';
+                img.style.cssText = 'max-width:100%; max-height:100%; border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,0.5); background:#fff;';
+                overlay.appendChild(img);
+                overlay.onclick = () => { overlay.style.display = 'none'; };
+                document.body.appendChild(overlay);
+                document.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.style.display = 'none'; });
+            }
+            document.getElementById('admin-image-zoom-content').src = url;
+            overlay.style.display = 'flex';
+        };
+
         function escapeHtml(str) {
             return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
