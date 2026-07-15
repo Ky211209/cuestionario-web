@@ -284,3 +284,24 @@ th { color: #1a73e8; background: #f8f9fa; text-transform: uppercase; }
     box-shadow: 0 8px 30px rgba(0,0,0,0.12);
     max-width: 300px;
 }
+
+/* ================================================================
+   ZOOM DE IMAGEN DE PREGUNTA
+   En escritorio, la imagen se amplía en el mismo lugar al pasar el
+   mouse (sin overlay, para que el cursor nunca quede "tapado" y
+   dispare mouseleave). En pantallas táctiles (sin hover real), el
+   agrandado se hace con un toque, mostrando la imagen en pantalla
+   completa (ver #image-zoom-overlay, creado por script.js).
+   ================================================================ */
+#question-image {
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #question-image:hover {
+        transform: scale(1.6);
+        position: relative;
+        z-index: 50;
+        box-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
+    }
+}
