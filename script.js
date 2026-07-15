@@ -311,6 +311,50 @@ let timerInterval = null;
 let tiempoLimiteSegundos = 0;
 let tiempoRestante = 0;
 
+// ================================================================
+// SOPORTE PARA PREGUNTAS DE SELECCIÓN MÚLTIPLE
+// Compatibilidad: "respuesta" puede ser un número (opción única, formato
+// clásico) o un arreglo de números (selección múltiple, 2+ correctas).
+// ================================================================
+let seleccionTemporalMultiple = []; // selección en progreso (modo estudio, antes de confirmar)
+
+function obtenerRespuestasCorrectas(question) {
+    const r = question.respuesta;
+    return Array.isArray(r) ? r.slice().sort((a, b) => a - b) : [r];
+}
+
+function esPreguntaMultiple(question) {
+    return obtenerRespuestasCorrectas(question).length > 1;
+}
+
+// Evalúa una respuesta del usuario (número o arreglo) contra la(s) correcta(s).
+// Para selección múltiple aplica crédito parcial: (aciertos - errores) / total de correctas, mínimo 0.
+function evaluarRespuesta(question, respuestaUsuario) {
+    const correctas = obtenerRespuestasCorrectas(question);
+    if (Array.isArray(respuestaUsuario)) {
+        const usuarioOrdenado = respuestaUsuario.slice().sort((a, b) => a - b);
+        const esCorrectaExacta = usuarioOrdenado.length === correctas.length &&
+            usuarioOrdenado.every((v, i) => v === correctas[i]);
+        const aciertos = respuestaUsuario.filter(i => correctas.includes(i)).length;
+        const errores = respuestaUsuario.filter(i => !correctas.includes(i)).length;
+        const puntaje = Math.max(0, (aciertos - errores) / correctas.length);
+        return { esCorrectaExacta, puntaje };
+    } else {
+        const esCorrectaExacta = correctas.includes(respuestaUsuario);
+        return { esCorrectaExacta, puntaje: esCorrectaExacta ? 1 : 0 };
+    }
+}
+
+// Convierte una respuesta (número, arreglo o null) en texto de letras legible (ej. "A, C")
+function formatearRespuestaLegible(resp) {
+    if (resp === null || resp === undefined) return 'Sin responder';
+    if (Array.isArray(resp)) {
+        if (resp.length === 0) return 'Sin responder';
+        return resp.slice().sort((a, b) => a - b).map(i => String.fromCharCode(65 + i)).join(', ');
+    }
+    return String.fromCharCode(65 + resp);
+}
+
 
 // 1. MANEJO DE SESIÓN
 onAuthStateChanged(auth, async (user) => {
@@ -655,7 +699,16 @@ function renderQuestion() {
         return;
     }
 
-    const yaRespondida = selectedAnswers[currentIndex] !== null;
+    const yaRespondida = selectedAnswers[currentIndex] !== null && selectedAnswers[currentIndex] !== undefined;
+    const preguntaMultiple = esPreguntaMultiple(question);
+    seleccionTemporalMultiple = []; // reiniciar selección en progreso al (re)dibujar la pregunta
+
+    if (preguntaMultiple && !(currentMode === "study" && yaRespondida)) {
+        const hint = document.createElement('p');
+        hint.style.cssText = 'font-size: 0.85rem; color: #1a73e8; font-weight: 600; text-align: left; margin-bottom: 12px;';
+        hint.innerHTML = '<i class="fas fa-check-double"></i> Esta pregunta tiene más de una respuesta correcta. Marca todas las que apliquen.';
+        optionsContainer.appendChild(hint);
+    }
 
     question.opciones.forEach((opcion, index) => {
         const button = document.createElement('button');
@@ -664,8 +717,16 @@ function renderQuestion() {
 
         if (currentMode === "study" && yaRespondida) {
             button.disabled = true;
-            if (index === question.respuesta) button.classList.add('correct');
-            else if (index === selectedAnswers[currentIndex]) button.classList.add('incorrect');
+            const correctas = obtenerRespuestasCorrectas(question);
+            const respuestaGuardada = selectedAnswers[currentIndex];
+            const userArr = Array.isArray(respuestaGuardada) ? respuestaGuardada : [respuestaGuardada];
+            if (correctas.includes(index)) button.classList.add('correct');
+            else if (userArr.includes(index)) button.classList.add('incorrect');
+        } else if (preguntaMultiple) {
+            const seleccionActual = currentMode === "study"
+                ? seleccionTemporalMultiple
+                : (Array.isArray(selectedAnswers[currentIndex]) ? selectedAnswers[currentIndex] : []);
+            if (seleccionActual.includes(index)) button.classList.add('selected');
         } else if (selectedAnswers[currentIndex] === index) {
             button.classList.add('selected');
         }
@@ -673,6 +734,16 @@ function renderQuestion() {
         button.onclick = () => selectAnswer(index);
         optionsContainer.appendChild(button);
     });
+
+    if (currentMode === "study" && preguntaMultiple && !yaRespondida) {
+        const btnConfirmar = document.createElement('button');
+        btnConfirmar.id = 'btn-confirmar-multiple';
+        btnConfirmar.className = 'btn-primary full-width';
+        btnConfirmar.style.marginTop = '10px';
+        btnConfirmar.textContent = 'Confirmar Respuesta';
+        btnConfirmar.onclick = () => confirmarRespuestaMultipleEstudio();
+        optionsContainer.appendChild(btnConfirmar);
+    }
 
     if (currentMode === "study" && yaRespondida) {
         optionsContainer.appendChild(crearFeedbackBox(question, selectedAnswers[currentIndex]));
@@ -700,7 +771,10 @@ function renderQuestion() {
     } else {
         btnNext.innerHTML = 'Siguiente <i class="fas fa-arrow-right"></i>';
         btnNext.onclick = () => {
-            if (selectedAnswers[currentIndex] === null && currentMode === "exam") {
+            const sinResponder = selectedAnswers[currentIndex] === null ||
+                selectedAnswers[currentIndex] === undefined ||
+                (Array.isArray(selectedAnswers[currentIndex]) && selectedAnswers[currentIndex].length === 0);
+            if (sinResponder && currentMode === "exam") {
                 Swal.fire({
                     icon: 'warning', title: 'Pregunta sin responder',
                     text: '¿Deseas continuar sin responder?',
@@ -718,42 +792,89 @@ function renderQuestion() {
     optionsContainer.appendChild(navDiv);
 }
 
-// Helper: crear caja de feedback
+// Helper: crear caja de feedback (soporta respuesta única o múltiple)
 function crearFeedbackBox(question, userAnswer) {
-    const correct = question.respuesta;
+    const correctas = obtenerRespuestasCorrectas(question);
+    const multiple = correctas.length > 1;
+    const { esCorrectaExacta } = evaluarRespuesta(question, userAnswer);
+
     const feedbackBox = document.createElement('div');
     feedbackBox.id = 'feedback-box';
     feedbackBox.style.cssText = `
         margin-top: 20px; padding: 15px; border-radius: 8px; text-align: left;
-        background: ${userAnswer === correct ? '#e6f4ea' : '#fce8e6'};
-        border-left: 4px solid ${userAnswer === correct ? '#34a853' : '#ea4335'};
+        background: ${esCorrectaExacta ? '#e6f4ea' : '#fce8e6'};
+        border-left: 4px solid ${esCorrectaExacta ? '#34a853' : '#ea4335'};
     `;
-    if (userAnswer === correct) {
+    if (esCorrectaExacta) {
         feedbackBox.innerHTML = `
             <p style="font-weight:bold;color:#34a853;margin-bottom:8px;"><i class="fas fa-check-circle"></i> ¡Correcto!</p>
             <p style="color:#555;font-size:0.95rem;">${question.explicacion_correcta || '¡Excelente trabajo!'}</p>
         `;
     } else {
+        const textoOpciones = correctas.map(i => `${String.fromCharCode(65 + i)}) ${question.opciones[i]}`).join(' &nbsp;·&nbsp; ');
         feedbackBox.innerHTML = `
             <p style="font-weight:bold;color:#ea4335;margin-bottom:8px;"><i class="fas fa-times-circle"></i> Incorrecto</p>
-            <p style="color:#555;font-size:0.95rem;margin-bottom:8px;">La respuesta correcta es: <strong>${String.fromCharCode(65 + correct)}) ${question.opciones[correct]}</strong></p>
+            <p style="color:#555;font-size:0.95rem;margin-bottom:8px;">${multiple ? 'Las respuestas correctas son' : 'La respuesta correcta es'}: <strong>${textoOpciones}</strong></p>
             <p style="color:#666;font-size:0.9rem;">${question.explicacion_correcta || 'Revisa el material de estudio.'}</p>
         `;
     }
     return feedbackBox;
 }
 
+// Confirma la selección múltiple en modo estudio (se llama desde el botón "Confirmar Respuesta")
+function confirmarRespuestaMultipleEstudio() {
+    if (seleccionTemporalMultiple.length === 0) {
+        Swal.fire({ icon: 'warning', title: 'Selecciona al menos una opción', timer: 1800, showConfirmButton: false, toast: true, position: 'top-end' });
+        return;
+    }
+
+    const question = questions[currentIndex];
+    selectedAnswers[currentIndex] = seleccionTemporalMultiple.slice();
+    const correctas = obtenerRespuestasCorrectas(question);
+
+    const buttons = document.querySelectorAll('.option-button');
+    buttons.forEach((btn, idx) => {
+        btn.disabled = true;
+        if (correctas.includes(idx)) btn.classList.add('correct');
+        else if (seleccionTemporalMultiple.includes(idx)) btn.classList.add('incorrect');
+    });
+
+    const btnConfirmar = document.getElementById('btn-confirmar-multiple');
+    if (btnConfirmar) btnConfirmar.remove();
+
+    const optionsContainer = document.getElementById('options-container');
+    const existingFeedback = document.getElementById('feedback-box');
+    if (existingFeedback) existingFeedback.remove();
+
+    const feedbackBox = crearFeedbackBox(question, selectedAnswers[currentIndex]);
+    const navButtons = optionsContainer.querySelector('div[style*="justify-content: space-between"]');
+    if (navButtons) {
+        optionsContainer.insertBefore(feedbackBox, navButtons);
+    } else {
+        optionsContainer.appendChild(feedbackBox);
+    }
+}
+
 // 5. SELECCIONAR RESPUESTA
 function selectAnswer(optionIndex) {
+    const question = questions[currentIndex];
+    const multiple = esPreguntaMultiple(question);
     const buttons = document.querySelectorAll('.option-button');
 
     if (currentMode === "study") {
-        const question = questions[currentIndex];
-        const correct = question.respuesta;
+        if (multiple) {
+            // Selección múltiple en estudio: solo marcar/desmarcar hasta que se confirme
+            const pos = seleccionTemporalMultiple.indexOf(optionIndex);
+            if (pos >= 0) seleccionTemporalMultiple.splice(pos, 1);
+            else seleccionTemporalMultiple.push(optionIndex);
+            buttons.forEach((btn, idx) => btn.classList.toggle('selected', seleccionTemporalMultiple.includes(idx)));
+            return;
+        }
 
+        // Opción única en estudio: feedback inmediato (comportamiento original)
         buttons.forEach((btn, idx) => {
             btn.disabled = true;
-            if (idx === correct) btn.classList.add('correct');
+            if (idx === question.respuesta) btn.classList.add('correct');
             else if (idx === optionIndex) btn.classList.add('incorrect');
         });
 
@@ -772,6 +893,14 @@ function selectAnswer(optionIndex) {
             optionsContainer.appendChild(feedbackBox);
         }
 
+    } else if (multiple) {
+        // Selección múltiple en examen: toggle libre, sin bloqueo hasta finalizar
+        let sel = Array.isArray(selectedAnswers[currentIndex]) ? selectedAnswers[currentIndex] : [];
+        const pos = sel.indexOf(optionIndex);
+        if (pos >= 0) sel.splice(pos, 1);
+        else sel.push(optionIndex);
+        selectedAnswers[currentIndex] = sel;
+        buttons.forEach((btn, idx) => btn.classList.toggle('selected', sel.includes(idx)));
     } else {
         buttons.forEach(btn => btn.classList.remove('selected'));
         buttons[optionIndex].classList.add('selected');
@@ -785,10 +914,18 @@ function finalizarExamen() {
     stopTimer();
 
     if (currentMode === "exam") {
-        let correctas = 0;
-        questions.forEach((q, idx) => { if (selectedAnswers[idx] === q.respuesta) correctas++; });
+        let correctas = 0; // preguntas totalmente correctas (para el conteo mostrado)
+        let puntajeTotal = 0; // suma de puntajes, con crédito parcial en selección múltiple
 
-        const porcentaje = ((correctas / questions.length) * 100).toFixed(1);
+        questions.forEach((q, idx) => {
+            const resp = selectedAnswers[idx];
+            if (resp === null || resp === undefined || (Array.isArray(resp) && resp.length === 0)) return;
+            const { esCorrectaExacta, puntaje } = evaluarRespuesta(q, resp);
+            if (esCorrectaExacta) correctas++;
+            puntajeTotal += puntaje;
+        });
+
+        const porcentaje = ((puntajeTotal / questions.length) * 100).toFixed(1);
 
         let tiempoTexto;
         if (tiempoLimiteSegundos > 0) {
@@ -802,8 +939,8 @@ function finalizarExamen() {
         Swal.fire({
             icon: 'info', title: 'Examen Finalizado',
             html: `<p style="font-size:1.1rem;margin:15px 0;">
-                <strong>Respuestas correctas:</strong> ${correctas} / ${questions.length}<br>
-                <strong>Calificación:</strong> ${porcentaje}%<br>
+                <strong>Preguntas totalmente correctas:</strong> ${correctas} / ${questions.length}<br>
+                <strong>Calificación (con crédito parcial):</strong> ${porcentaje}%<br>
                 <strong>Tiempo:</strong> ${tiempoTexto}
             </p>`,
             confirmButtonColor: '#1a73e8',
@@ -839,7 +976,8 @@ function mostrarResultadosDetallados(correctas) {
     const resultsDiv = document.getElementById('detailed-results');
     questions.forEach((q, idx) => {
         const userAnswer = selectedAnswers[idx];
-        const isCorrect = userAnswer === q.respuesta;
+        const { esCorrectaExacta } = evaluarRespuesta(q, userAnswer);
+        const isCorrect = esCorrectaExacta;
         const resultCard = document.createElement('div');
         resultCard.style.cssText = `
             background:${isCorrect ? 'linear-gradient(135deg, #1a73e8, #155eef)' : '#fce8e6'};color:${isCorrect ? '#ffffff' : '#333'};padding:15px;border-radius:8px;
@@ -848,8 +986,8 @@ function mostrarResultadosDetallados(correctas) {
         resultCard.innerHTML = `
             <p style="font-weight:bold;margin-bottom:8px;">${idx + 1}. ${q.texto || q.explicacion || q.pregunta || 'Sin texto'}</p>
             <p style="${isCorrect ? 'color:rgba(255,255,255,0.85);' : 'color:#666;'}font-size:0.9rem;">
-                Tu respuesta: <strong>${userAnswer !== null ? String.fromCharCode(65 + userAnswer) : 'Sin responder'}</strong><br>
-                Respuesta correcta: <strong>${String.fromCharCode(65 + q.respuesta)}</strong>
+                Tu respuesta: <strong>${formatearRespuestaLegible(userAnswer)}</strong><br>
+                Respuesta correcta: <strong>${formatearRespuestaLegible(obtenerRespuestasCorrectas(q))}</strong>
             </p>
         `;
         resultsDiv.appendChild(resultCard);
