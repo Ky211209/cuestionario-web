@@ -577,6 +577,9 @@
             <p style="font-size: 0.85em; color: #666; margin-bottom: 10px;">
                 Si la pregunta ya existe, se actualizarán sus opciones y la <strong>explicación</strong>.
             </p>
+            <p style="font-size: 0.85em; color: #666; margin-bottom: 10px;">
+                Columna <strong>respuesta</strong>: usa un número (0=A, 1=B, 2=C, 3=D) para opción única, o varios separados por coma (ej. <strong>0,2</strong>) para selección múltiple.
+            </p>
             <input type="file" id="upload-excel" accept=".xlsx" style="margin: 20px 0;">
             <button id="btn-save-excel" class="btn-primary">Procesar y Sincronizar con Firebase</button>
         </div>
@@ -788,6 +791,7 @@
             <!-- RESPUESTA CORRECTA -->
             <div class="form-group">
                 <label><i class="fas fa-check-circle"></i> Respuesta Correcta</label>
+                <p style="font-size:0.78rem;color:#888;margin-top:-4px;margin-bottom:8px;">Marca una sola opción para preguntas de opción única, o dos o más para selección múltiple.</p>
                 <div class="respuesta-selector" id="modal-respuesta-selector">
                     <div class="respuesta-opcion" data-val="0" onclick="seleccionarRespuesta(0)">
                         <div class="letra-resp">A</div> Opción A
@@ -891,7 +895,7 @@
 
         let todasLasPreguntas = [];   // cache de la materia cargada
         let materiaActual = '';
-        let respuestaSeleccionada = -1;
+        let respuestasSeleccionadas = []; // índices marcados como correctos (1 = opción única, 2+ = selección múltiple)
 
         const letras = ['A', 'B', 'C', 'D'];
         const colores = ['#1a73e8', '#34a853', '#fbbc04', '#ea4335'];
@@ -1009,11 +1013,13 @@
 
             preguntasAMostrar.forEach((p, i) => {
                 const num = desde + i + 1;
-                const resp = parseInt(p.respuesta ?? -1);
+                const respRaw = p.respuesta;
+                const respArr = Array.isArray(respRaw) ? respRaw.map(r => parseInt(r)) : [parseInt(respRaw ?? -1)];
+                const esMultiple = respArr.length > 1;
                 const opciones = p.opciones || [];
                 const opcionesHtml = opciones.map((op, idx) => `
-                    <div class="opcion-mini ${idx === resp ? 'correcta' : ''}">
-                        ${idx === resp ? '<i class="fas fa-check" style="font-size:0.7rem;margin-right:3px;"></i>' : ''}
+                    <div class="opcion-mini ${respArr.includes(idx) ? 'correcta' : ''}">
+                        ${respArr.includes(idx) ? '<i class="fas fa-check" style="font-size:0.7rem;margin-right:3px;"></i>' : ''}
                         <strong>${letras[idx]}.</strong> ${escapeHtml(op)}
                     </div>
                 `).join('');
@@ -1022,7 +1028,7 @@
                     <tr>
                         <td><div class="num-badge">${num}</div></td>
                         <td class="td-pregunta">
-                            <div class="pregunta-texto">${escapeHtml(p.texto || '')}${p.imagen_url ? ' <span title="Tiene imagen" style="display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,#1a73e8,#155eef);color:white;font-size:0.68rem;padding:2px 7px;border-radius:10px;font-weight:600;vertical-align:middle;"><i class=\'fas fa-image\'></i> IMG</span>' : ''}</div>
+                            <div class="pregunta-texto">${escapeHtml(p.texto || '')}${p.imagen_url ? ' <span title="Tiene imagen" style="display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,#1a73e8,#155eef);color:white;font-size:0.68rem;padding:2px 7px;border-radius:10px;font-weight:600;vertical-align:middle;"><i class=\'fas fa-image\'></i> IMG</span>' : ''}${esMultiple ? ' <span title="Selección múltiple" style="display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,#34a853,#128a4f);color:white;font-size:0.68rem;padding:2px 7px;border-radius:10px;font-weight:600;vertical-align:middle;"><i class=\'fas fa-check-double\'></i> MÚLTIPLE</span>' : ''}</div>
                             <div class="opciones-mini">${opcionesHtml}</div>
                         </td>
                         <td class="td-explicacion">
@@ -1103,16 +1109,19 @@
             document.getElementById('modal-imagen-url').value = '';
             const prev = document.getElementById('modal-imagen-preview');
             prev.src = ''; prev.style.display = 'none';
-            respuestaSeleccionada = -1;
+            respuestasSeleccionadas = [];
             document.querySelectorAll('.respuesta-opcion').forEach(el => el.classList.remove('seleccionada'));
             // Preseleccionar materia actual si hay una
             if (materiaActual) document.getElementById('modal-materia').value = materiaActual;
         }
 
+        // Toggle: permite marcar una sola opción (opción única) o varias (selección múltiple)
         window.seleccionarRespuesta = (idx) => {
-            respuestaSeleccionada = idx;
+            const pos = respuestasSeleccionadas.indexOf(idx);
+            if (pos >= 0) respuestasSeleccionadas.splice(pos, 1);
+            else respuestasSeleccionadas.push(idx);
             document.querySelectorAll('.respuesta-opcion').forEach((el, i) => {
-                el.classList.toggle('seleccionada', i === idx);
+                el.classList.toggle('seleccionada', respuestasSeleccionadas.includes(i));
             });
         };
 
@@ -1158,10 +1167,13 @@
             const prev = document.getElementById('modal-imagen-preview');
             if (imgUrl) { prev.src = imgUrl; prev.style.display = 'block'; } else { prev.src = ''; prev.style.display = 'none'; }
 
-            const resp = parseInt(p.respuesta ?? -1);
-            if (resp >= 0) {
-                window.seleccionarRespuesta(resp);
-            }
+            respuestasSeleccionadas = [];
+            document.querySelectorAll('.respuesta-opcion').forEach(el => el.classList.remove('seleccionada'));
+            const respGuardada = p.respuesta;
+            const indicesGuardados = Array.isArray(respGuardada) ? respGuardada : [parseInt(respGuardada ?? -1)];
+            indicesGuardados.forEach(idx => {
+                if (idx >= 0) window.seleccionarRespuesta(idx);
+            });
 
             abrirModal(true);
         };
@@ -1204,12 +1216,13 @@
             // Validar
             if (!texto) return Swal.fire('Campo requerido', 'Escribe el texto de la pregunta.', 'warning');
             if (!op0 || !op1 || !op2 || !op3) return Swal.fire('Campo requerido', 'Completa las 4 opciones de respuesta.', 'warning');
-            if (respuestaSeleccionada < 0) return Swal.fire('Campo requerido', 'Selecciona cuál es la respuesta correcta.', 'warning');
+            if (respuestasSeleccionadas.length === 0) return Swal.fire('Campo requerido', 'Selecciona cuál es la respuesta correcta (o varias, si es de selección múltiple).', 'warning');
 
+            const indicesOrdenados = respuestasSeleccionadas.slice().sort((a, b) => a - b);
             const datos = {
                 texto,
                 opciones: [op0, op1, op2, op3],
-                respuesta: respuestaSeleccionada,
+                respuesta: indicesOrdenados.length === 1 ? indicesOrdenados[0] : indicesOrdenados,
                 explicacion_correcta: explicacion || 'Consulte el material de estudio oficial.',
                 ...(imagenUrl ? { imagen_url: imagenUrl } : {})
             };
@@ -1306,7 +1319,14 @@
                     if (!snap.empty) { ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, snap.docs[0].id); actualizadas++; }
                     else { ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`); nuevas++; }
                     const imgUrlExcel = p.imagen_url ? p.imagen_url.toString().trim() : '';
-                    const datosExcel = { texto: p.texto.trim(), opciones: [p.opcion_0.toString().trim(), p.opcion_1.toString().trim(), p.opcion_2.toString().trim(), p.opcion_3.toString().trim()], respuesta: parseInt(p.respuesta), explicacion_correcta: p.explicacion ? p.explicacion.toString().trim() : "Consulte el material de estudio oficial." };
+                    // Columna "respuesta": un número (0-3) para opción única, o varios separados por coma/punto y coma
+                    // para selección múltiple (ej. "0,2").
+                    const indicesRespuesta = p.respuesta.toString().split(/[,;]/)
+                        .map(s => parseInt(s.trim()))
+                        .filter(n => !isNaN(n))
+                        .sort((a, b) => a - b);
+                    const respuestaFinal = indicesRespuesta.length > 1 ? indicesRespuesta : (indicesRespuesta[0] ?? parseInt(p.respuesta));
+                    const datosExcel = { texto: p.texto.trim(), opciones: [p.opcion_0.toString().trim(), p.opcion_1.toString().trim(), p.opcion_2.toString().trim(), p.opcion_3.toString().trim()], respuesta: respuestaFinal, explicacion_correcta: p.explicacion ? p.explicacion.toString().trim() : "Consulte el material de estudio oficial." };
                     if (imgUrlExcel) datosExcel.imagen_url = imgUrlExcel;
                     batch.set(ref, datosExcel);
                 }
@@ -1689,27 +1709,34 @@
                 preguntas.forEach((p, idx) => {
                     const texto = p.texto || p.pregunta || p.explicacion || 'Sin texto';
                     const opciones = p.opciones || [];
-                    const correcta = p.respuesta;
+                    const correctaRaw = p.respuesta;
+                    const correctas = Array.isArray(correctaRaw) ? correctaRaw.map(c => parseInt(c)) : [parseInt(correctaRaw)];
+                    const esMultiple = correctas.length > 1;
+                    const insigniaMultiple = esMultiple
+                        ? '<span style="background:#34a853;color:white;padding:2px 8px;border-radius:10px;font-size:0.7rem;margin-left:8px;font-weight:700;vertical-align:middle;">SELECCIÓN MÚLTIPLE</span>'
+                        : '';
 
                     html += `<div class="pdf-pregunta" style="margin-bottom:20px;padding:14px 16px;border-left:3px solid #1a73e8;background:#fafafa;border-radius:0 8px 8px 0;page-break-inside:avoid;break-inside:avoid;">
                         <p style="font-weight:700;font-size:0.93rem;margin:0 0 10px 0;color:#202124;">
                             <span style="background:#1a73e8;color:white;padding:2px 8px;border-radius:4px;font-size:0.78rem;margin-right:8px;font-family:monospace;">${idx+1}</span>
-                            ${escapeHtml(texto)}
+                            ${escapeHtml(texto)}${insigniaMultiple}
                         </p>`;
 
                     if (soloCorrecta) {
-                        // Modo "solo respuesta correcta": mostrar únicamente la opción correcta
-                        const textoCorrecta = opciones[correcta] || '';
-                        html += `<div style="display:flex;align-items:center;gap:8px;margin-left:6px;padding:8px 12px;border-radius:6px;background:linear-gradient(135deg,#1a73e8,#155eef);border:1.5px solid #155eef;">
-                            <span style="background:rgba(255,255,255,0.25);color:white;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;flex-shrink:0;">${letrasOpc[correcta]}</span>
-                            <span style="color:#1e7e34;font-weight:700;font-size:0.9rem;">${escapeHtml(textoCorrecta)}</span>
-                            <span style="margin-left:auto;color:#ffffff;font-size:1rem;">✓</span>
-                        </div>`;
+                        // Modo "solo respuesta correcta": mostrar únicamente la(s) opción(es) correcta(s)
+                        html += correctas.map(ci => {
+                            const textoCorrecta = opciones[ci] || '';
+                            return `<div style="display:flex;align-items:center;gap:8px;margin-left:6px;margin-bottom:6px;padding:8px 12px;border-radius:6px;background:linear-gradient(135deg,#1a73e8,#155eef);border:1.5px solid #155eef;">
+                                <span style="background:rgba(255,255,255,0.25);color:white;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;flex-shrink:0;">${letrasOpc[ci]}</span>
+                                <span style="color:#1e7e34;font-weight:700;font-size:0.9rem;">${escapeHtml(textoCorrecta)}</span>
+                                <span style="margin-left:auto;color:#ffffff;font-size:1rem;">✓</span>
+                            </div>`;
+                        }).join('');
                     } else {
                         // Modo "todas las opciones" (con o sin resaltado)
                         html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-left:6px;">`;
                         opciones.forEach((op, oi) => {
-                            const esCorrecta = mostrarResp && oi === correcta;
+                            const esCorrecta = mostrarResp && correctas.includes(oi);
                             html += `<div style="padding:6px 10px;border-radius:6px;font-size:0.85rem;border:1.5px solid ${esCorrecta?'#155eef':'#e0e0e0'};background:${esCorrecta?'linear-gradient(135deg,#1a73e8,#155eef)':'white'};color:${esCorrecta?'#ffffff':'#444'};font-weight:${esCorrecta?'700':'400'};display:flex;align-items:center;gap:7px;">
                                 <span style="background:${esCorrecta?'rgba(255,255,255,0.25)':'#e8f0fe'};color:${esCorrecta?'#ffffff':'#1a73e8'};width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:800;flex-shrink:0;">${letrasOpc[oi]}</span>
                                 ${escapeHtml(op)}
