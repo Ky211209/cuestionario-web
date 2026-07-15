@@ -646,6 +646,66 @@ document.getElementById('btn-start').onclick = async () => {
     }
 };
 
+// ================================================================
+// ZOOM DE IMAGEN DE PREGUNTA
+// En computador: se amplía al pasar el mouse (hover). En móvil/táctil,
+// donde no existe hover, se amplía con un toque y se cierra con otro.
+// ================================================================
+let zoomOverlayEl = null;
+
+function crearZoomOverlay() {
+    if (zoomOverlayEl) return zoomOverlayEl;
+    zoomOverlayEl = document.createElement('div');
+    zoomOverlayEl.id = 'image-zoom-overlay';
+    zoomOverlayEl.style.cssText = `
+        display: none;
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(0,0,0,0.82);
+        z-index: 9990;
+        justify-content: center;
+        align-items: center;
+        padding: 30px;
+        cursor: zoom-out;
+    `;
+    const imgZoom = document.createElement('img');
+    imgZoom.id = 'image-zoom-content';
+    imgZoom.style.cssText = `
+        max-width: 100%;
+        max-height: 100%;
+        border-radius: 10px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        background: #fff;
+    `;
+    zoomOverlayEl.appendChild(imgZoom);
+    zoomOverlayEl.onclick = ocultarZoomImagen;
+    document.body.appendChild(zoomOverlayEl);
+    return zoomOverlayEl;
+}
+
+function mostrarZoomImagen(src) {
+    const overlay = crearZoomOverlay();
+    document.getElementById('image-zoom-content').src = src;
+    overlay.style.display = 'flex';
+}
+
+function ocultarZoomImagen() {
+    if (zoomOverlayEl) zoomOverlayEl.style.display = 'none';
+}
+
+function activarZoomImagen(imgEl) {
+    if (!imgEl) return;
+    // Un clic/toque abre la imagen ampliada en pantalla completa (funciona en móvil y escritorio).
+    // El agrandado "al pasar el mouse" en escritorio se maneja con CSS puro (ver style.css),
+    // para evitar que este overlay tape el cursor y dispare mouseleave sobre la imagen original.
+    imgEl.onclick = () => mostrarZoomImagen(imgEl.src);
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') ocultarZoomImagen();
+});
+
 // 4. RENDERIZAR PREGUNTA
 function renderQuestion() {
     if (currentIndex >= questions.length) { finalizarExamen(); return; }
@@ -669,12 +729,18 @@ function renderQuestion() {
     // Imagen de la pregunta (si existe)
     if (question.imagen_url) {
         questionText.innerHTML = `
-            <img src="${question.imagen_url}" 
-                 alt="Imagen de la pregunta"
-                 style="width:100%;max-height:280px;object-fit:contain;border-radius:8px;margin-bottom:14px;border:1px solid #e0e0e0;display:block;"
-                 onerror="this.style.display='none'">
+            <div style="position:relative;margin-bottom:14px;">
+                <img id="question-image" src="${question.imagen_url}" 
+                     alt="Imagen de la pregunta"
+                     style="width:100%;max-height:280px;object-fit:contain;border-radius:8px;border:1px solid #e0e0e0;display:block;cursor:zoom-in;"
+                     onerror="this.parentElement.style.display='none'">
+                <span style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,0.55);color:#fff;font-size:0.7rem;padding:3px 8px;border-radius:12px;pointer-events:none;">
+                    <i class="fas fa-search-plus"></i> Ampliar
+                </span>
+            </div>
             <span>${currentIndex + 1}. ${preguntaTexto}</span>
         `;
+        activarZoomImagen(document.getElementById('question-image'));
     } else {
         questionText.textContent = `${currentIndex + 1}. ${preguntaTexto}`;
     }
