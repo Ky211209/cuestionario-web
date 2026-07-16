@@ -305,3 +305,20 @@ th { color: #1a73e8; background: #f8f9fa; text-transform: uppercase; }
         box-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
     }
 }
+
+/* ================================================================
+   OPCIONES DE RESPUESTA CON IMAGEN (ej. preguntas donde cada opción
+   es una gráfica en vez de texto)
+   ================================================================ */
+.option-button-imagen {
+    align-items: flex-start;
+}
+
+.option-button-imagen img {
+    max-width: 100%;
+    max-height: 160px;
+    object-fit: contain;
+    border-radius: 6px;
+    background: #ffffff;
+    flex: 1;
+}
