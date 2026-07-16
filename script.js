@@ -323,6 +323,12 @@ function obtenerRespuestasCorrectas(question) {
     return Array.isArray(r) ? r.slice().sort((a, b) => a - b) : [r];
 }
 
+// Detecta si el texto de una opción es en realidad la ruta/URL de una imagen
+// (para preguntas donde cada opción es una gráfica en vez de texto).
+function esOpcionImagen(texto) {
+    return typeof texto === 'string' && /\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(texto.trim());
+}
+
 function esPreguntaMultiple(question) {
     return obtenerRespuestasCorrectas(question).length > 1;
 }
@@ -779,7 +785,13 @@ function renderQuestion() {
     question.opciones.forEach((opcion, index) => {
         const button = document.createElement('button');
         button.className = 'option-button';
-        button.innerHTML = `<span class="option-letter">${String.fromCharCode(65 + index)}</span> ${opcion}`;
+        if (esOpcionImagen(opcion)) {
+            button.classList.add('option-button-imagen');
+            button.innerHTML = `<span class="option-letter">${String.fromCharCode(65 + index)}</span>
+                <img src="${opcion}" alt="Opción ${String.fromCharCode(65 + index)}" onerror="this.alt='(No se pudo cargar la imagen)'">`;
+        } else {
+            button.innerHTML = `<span class="option-letter">${String.fromCharCode(65 + index)}</span> ${opcion}`;
+        }
 
         if (currentMode === "study" && yaRespondida) {
             button.disabled = true;
