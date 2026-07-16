@@ -340,6 +340,15 @@
             align-items: center;
             gap: 8px;
         }
+        .opcion-preview-img {
+            max-height: 70px;
+            max-width: 100%;
+            display: block;
+            margin: 4px 0 10px 38px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            background: #fff;
+        }
         .opcion-letra {
             width: 30px;
             height: 30px;
@@ -764,26 +773,31 @@
             <!-- OPCIONES -->
             <div class="form-group">
                 <label><i class="fas fa-list"></i> Opciones de Respuesta</label>
+                <p style="font-size:0.78rem;color:#888;margin-top:-4px;margin-bottom:8px;">Para una opción de texto normal, escribe la respuesta. Para que la opción sea una gráfica/imagen, pega la ruta (ej. <strong>imagenes/grafica_a.png</strong>) en vez de texto.</p>
                 <div class="opciones-grid">
                     <div>
                         <div class="opcion-input-wrap" style="margin-bottom:10px;">
                             <div class="opcion-letra">A</div>
-                            <input type="text" id="modal-op0" placeholder="Opción A">
+                            <input type="text" id="modal-op0" placeholder="Opción A" oninput="previsualizarOpcionImagen(0)">
                         </div>
+                        <img id="modal-op0-preview" class="opcion-preview-img hidden">
                         <div class="opcion-input-wrap">
                             <div class="opcion-letra" style="background:#34a853;">B</div>
-                            <input type="text" id="modal-op1" placeholder="Opción B">
+                            <input type="text" id="modal-op1" placeholder="Opción B" oninput="previsualizarOpcionImagen(1)">
                         </div>
+                        <img id="modal-op1-preview" class="opcion-preview-img hidden">
                     </div>
                     <div>
                         <div class="opcion-input-wrap" style="margin-bottom:10px;">
                             <div class="opcion-letra" style="background:#fbbc04;">C</div>
-                            <input type="text" id="modal-op2" placeholder="Opción C">
+                            <input type="text" id="modal-op2" placeholder="Opción C" oninput="previsualizarOpcionImagen(2)">
                         </div>
+                        <img id="modal-op2-preview" class="opcion-preview-img hidden">
                         <div class="opcion-input-wrap">
                             <div class="opcion-letra" style="background:#ea4335;">D</div>
-                            <input type="text" id="modal-op3" placeholder="Opción D">
+                            <input type="text" id="modal-op3" placeholder="Opción D" oninput="previsualizarOpcionImagen(3)">
                         </div>
+                        <img id="modal-op3-preview" class="opcion-preview-img hidden">
                     </div>
                 </div>
             </div>
@@ -1020,7 +1034,10 @@
                 const opcionesHtml = opciones.map((op, idx) => `
                     <div class="opcion-mini ${respArr.includes(idx) ? 'correcta' : ''}">
                         ${respArr.includes(idx) ? '<i class="fas fa-check" style="font-size:0.7rem;margin-right:3px;"></i>' : ''}
-                        <strong>${letras[idx]}.</strong> ${escapeHtml(op)}
+                        <strong>${letras[idx]}.</strong>
+                        ${esOpcionImagen(op)
+                            ? `<img src="${op}" alt="Opción ${letras[idx]}" title="Clic para ampliar" onclick="event.stopPropagation(); window.ampliarMiniatura('${op}')" style="height:26px;vertical-align:middle;border-radius:3px;cursor:zoom-in;margin-left:4px;">`
+                            : escapeHtml(op)}
                     </div>
                 `).join('');
 
@@ -1117,6 +1134,11 @@
             document.getElementById('modal-op1').value = '';
             document.getElementById('modal-op2').value = '';
             document.getElementById('modal-op3').value = '';
+            ['modal-op0-preview','modal-op1-preview','modal-op2-preview','modal-op3-preview'].forEach(id => {
+                const el = document.getElementById(id);
+                el.classList.add('hidden');
+                el.src = '';
+            });
             document.getElementById('modal-explicacion').value = '';
             document.getElementById('modal-imagen-url').value = '';
             const prev = document.getElementById('modal-imagen-preview');
@@ -1172,6 +1194,7 @@
             const opciones = p.opciones || [];
             ['modal-op0','modal-op1','modal-op2','modal-op3'].forEach((id, i) => {
                 document.getElementById(id).value = opciones[i] || '';
+                window.previsualizarOpcionImagen(i);
             });
             document.getElementById('modal-explicacion').value = p.explicacion_correcta || '';
             const imgUrl = p.imagen_url || '';
@@ -1295,6 +1318,25 @@
             document.getElementById('admin-image-zoom-content').src = url;
             overlay.style.display = 'flex';
         };
+
+        // Previsualiza en vivo la imagen de una opción del modal, si el texto pegado parece una ruta de imagen
+        window.previsualizarOpcionImagen = (idx) => {
+            const input = document.getElementById(`modal-op${idx}`);
+            const preview = document.getElementById(`modal-op${idx}-preview`);
+            if (esOpcionImagen(input.value)) {
+                preview.src = input.value.trim();
+                preview.classList.remove('hidden');
+            } else {
+                preview.classList.add('hidden');
+                preview.src = '';
+            }
+        };
+
+        // Detecta si el texto de una opción es en realidad la ruta/URL de una imagen
+        // (para preguntas donde cada opción es una gráfica en vez de texto).
+        function esOpcionImagen(texto) {
+            return typeof texto === 'string' && /\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(texto.trim());
+        }
 
         function escapeHtml(str) {
             return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1767,9 +1809,12 @@
                         // Modo "solo respuesta correcta": mostrar únicamente la(s) opción(es) correcta(s)
                         html += correctas.map(ci => {
                             const textoCorrecta = opciones[ci] || '';
+                            const contenidoOpcion = esOpcionImagen(textoCorrecta)
+                                ? `<img src="${textoCorrecta}" alt="Opción ${letrasOpc[ci]}" style="max-height:90px;max-width:200px;object-fit:contain;border-radius:4px;background:#fff;" onerror="this.style.display='none'">`
+                                : `<span style="color:#ffffff;font-weight:700;font-size:0.9rem;">${escapeHtml(textoCorrecta)}</span>`;
                             return `<div style="display:flex;align-items:center;gap:8px;margin-left:6px;margin-bottom:6px;padding:8px 12px;border-radius:6px;background:linear-gradient(135deg,#1a73e8,#155eef);border:1.5px solid #155eef;">
                                 <span style="background:rgba(255,255,255,0.25);color:white;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;flex-shrink:0;">${letrasOpc[ci]}</span>
-                                <span style="color:#ffffff;font-weight:700;font-size:0.9rem;">${escapeHtml(textoCorrecta)}</span>
+                                ${contenidoOpcion}
                                 <span style="margin-left:auto;color:#ffffff;font-size:1rem;">✓</span>
                             </div>`;
                         }).join('');
@@ -1778,9 +1823,12 @@
                         html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-left:6px;">`;
                         opciones.forEach((op, oi) => {
                             const esCorrecta = mostrarResp && correctas.includes(oi);
+                            const contenidoOpcion = esOpcionImagen(op)
+                                ? `<img src="${op}" alt="Opción ${letrasOpc[oi]}" style="max-height:70px;max-width:100%;object-fit:contain;border-radius:4px;background:#fff;" onerror="this.style.display='none'">`
+                                : escapeHtml(op);
                             html += `<div style="padding:6px 10px;border-radius:6px;font-size:0.85rem;border:1.5px solid ${esCorrecta?'#155eef':'#e0e0e0'};background:${esCorrecta?'linear-gradient(135deg,#1a73e8,#155eef)':'white'};color:${esCorrecta?'#ffffff':'#444'};font-weight:${esCorrecta?'700':'400'};display:flex;align-items:center;gap:7px;">
                                 <span style="background:${esCorrecta?'rgba(255,255,255,0.25)':'#e8f0fe'};color:${esCorrecta?'#ffffff':'#1a73e8'};width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:800;flex-shrink:0;">${letrasOpc[oi]}</span>
-                                ${escapeHtml(op)}
+                                ${contenidoOpcion}
                                 ${esCorrecta?'<span style="margin-left:auto;font-size:1rem;">✓</span>':''}
                             </div>`;
                         });
