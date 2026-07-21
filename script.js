@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 function getDeviceId() {
@@ -23,11 +23,6 @@ const auth = getAuth(app);
 setPersistence(auth, browserLocalPersistence).catch(e => console.warn("setPersistence error:", e));
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
-
-// FIX MÓVIL: capturar resultado al regresar de Google tras redirect
-getRedirectResult(auth).catch(err => {
-    if (err && err.code !== 'auth/cancelled-popup-request') console.warn('redirect result:', err.code);
-});
 
 // ================================================================
 // DETECCIÓN DE DISPOSITIVO MÓVIL
@@ -1163,24 +1158,24 @@ document.getElementById('btn-header-return').onclick = () => {
 // ================================================================
 // BOTÓN LOGIN — signInWithPopup (móvil y escritorio)
 // browserLocalPersistence garantiza que la sesión se guarda en
-// localStorage, no en cookies, evitando el bucle en GitHub Pages móvil.
+// localStorage, no en cookies.
+// FIX MÓVIL: se usa signInWithPopup también en móvil (antes era
+// signInWithRedirect). El redirect dependía de que el navegador
+// guardara estado temporal entre el dominio de la página y el
+// authDomain de Firebase (dominio distinto); en Chrome de Android/iOS
+// ese almacenamiento entre dominios puede bloquearse, y el usuario
+// vuelve a la pantalla de Bienvenido sin haber iniciado sesión.
+// signInWithPopup no depende de eso porque nunca sale del dominio
+// de la página.
 // ================================================================
 document.getElementById('btn-login').onclick = () => {
     const btn = document.getElementById('btn-login');
     btn.disabled = true;
     btn.textContent = 'Conectando...';
-    if (esMobil) {
-        signInWithRedirect(auth, provider).catch(err => {
-            btn.disabled = false; btn.textContent = 'Acceder con Google';
-            console.error('Error redirect:', err);
+    signInWithPopup(auth, provider).catch(err => {
+        btn.disabled = false; btn.textContent = 'Acceder con Google';
+        if (!['auth/popup-closed-by-user','auth/cancelled-popup-request'].includes(err.code)) {
             Swal.fire({ icon:'error', title:'Error al iniciar sesión', html:`Código: <code>${err.code}</code>`, confirmButtonText:'Entendido' });
-        });
-    } else {
-        signInWithPopup(auth, provider).catch(err => {
-            btn.disabled = false; btn.textContent = 'Acceder con Google';
-            if (!['auth/popup-closed-by-user','auth/cancelled-popup-request'].includes(err.code)) {
-                Swal.fire({ icon:'error', title:'Error al iniciar sesión', html:`Código: <code>${err.code}</code>`, confirmButtonText:'Entendido' });
-            }
-        });
-    }
+        }
+    });
 };
