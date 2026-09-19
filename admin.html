@@ -464,6 +464,21 @@
             font-weight: 700;
         }
 
+        /* Icono de materia (pestaña Materias) */
+        .materia-swatch {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.8rem;
+            margin-right: 8px;
+            flex-shrink: 0;
+            vertical-align: middle;
+        }
+
         /* Responsive */
         @media (max-width: 600px) {
             .opciones-grid { grid-template-columns: 1fr; }
@@ -509,6 +524,9 @@
         <nav class="admin-nav">
             <button onclick="changeTab('tab-preguntas')" id="btn-tab-preguntas" class="tab-btn active">
                 <i class="fas fa-list-ol"></i> Banco de Preguntas
+            </button>
+            <button onclick="changeTab('tab-materias')" id="btn-tab-materias" class="tab-btn">
+                <i class="fas fa-book-open"></i> Materias
             </button>
             <button onclick="changeTab('tab-excel')" id="btn-tab-excel" class="tab-btn">
                 <i class="fas fa-file-excel"></i> Cargar Excel
@@ -579,6 +597,63 @@
         </div>
 
         <!-- ================================================================
+             TAB: MATERIAS
+             ================================================================ -->
+        <div id="tab-materias" class="hidden">
+            <h3>Gestión de Materias</h3>
+            <p style="font-size: 0.85em; color: #666; margin-bottom: 10px;">
+                Las materias creadas aquí aparecen en el simulador, en el banco de preguntas, en la plantilla de Excel, en Imprimir PDF y en la asignación de alumnos.
+                Los alumnos que ya tienen materias asignadas verán la nueva materia solo cuando la marque en su ficha (pestaña Alumnos).
+            </p>
+            <div id="materias-aviso" class="hidden" style="background:#fff8e1; border:1px solid #ffe08a; color:#7a5b00; padding:10px 12px; border-radius:8px; font-size:0.83rem; margin-bottom:12px;"></div>
+
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <input type="hidden" id="mat-id-edicion">
+                <label id="mat-titulo-form" style="font-size:0.82rem; font-weight:700; color:#5f6368; display:block; margin-bottom:8px;">Nueva materia</label>
+                <input type="text" id="mat-nombre" maxlength="80" placeholder="Nombre de la materia (ej. Redes de Computadoras)" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 10px;">
+
+                <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center; flex-wrap:wrap;">
+                    <select id="mat-icono" style="flex:1; min-width:180px; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                        <option value="fa-book">Ícono: Libro</option>
+                        <option value="fa-microscope">Ícono: Microscopio</option>
+                        <option value="fa-scale-balanced">Ícono: Balanza</option>
+                        <option value="fa-clipboard-check">Ícono: Lista de verificación</option>
+                        <option value="fa-lightbulb">Ícono: Bombilla</option>
+                        <option value="fa-robot">Ícono: Robot</option>
+                        <option value="fa-briefcase">Ícono: Maletín</option>
+                        <option value="fa-network-wired">Ícono: Redes</option>
+                        <option value="fa-database">Ícono: Base de datos</option>
+                        <option value="fa-shield-halved">Ícono: Seguridad</option>
+                        <option value="fa-code">Ícono: Código</option>
+                        <option value="fa-server">Ícono: Servidor</option>
+                        <option value="fa-calculator">Ícono: Calculadora</option>
+                        <option value="fa-chart-line">Ícono: Gráfico</option>
+                        <option value="fa-gears">Ícono: Engranajes</option>
+                        <option value="fa-mobile-screen">Ícono: Móvil</option>
+                    </select>
+                    <input type="color" id="mat-color" value="#1a73e8" title="Color de la materia" style="width:56px; height:40px; border:1px solid #ddd; border-radius:5px; padding:2px; background:white; cursor:pointer;">
+                    <span id="mat-preview" class="materia-swatch" style="width:40px; height:40px; font-size:1rem;"><i class="fas fa-book"></i></span>
+                </div>
+
+                <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; cursor:pointer; margin-bottom:8px;">
+                    <input type="checkbox" id="mat-activa" checked style="width:15px; height:15px; accent-color:#1a73e8;">
+                    Visible para los alumnos (activa)
+                </label>
+                <p id="mat-id-preview" style="font-size:0.78rem; color:#888; margin-bottom:10px;">El ID de la materia se genera a partir del nombre.</p>
+
+                <div style="display:flex; gap:10px;">
+                    <button id="btn-guardar-materia" class="btn-primary" style="flex:1;">Guardar materia</button>
+                    <button id="btn-cancelar-materia" class="btn-secondary hidden">Cancelar edición</button>
+                </div>
+            </div>
+
+            <table>
+                <thead><tr><th>Materia</th><th>ID</th><th>Estado</th><th>Acciones</th></tr></thead>
+                <tbody id="materias-table-body"></tbody>
+            </table>
+        </div>
+
+        <!-- ================================================================
              TAB: CARGAR EXCEL
              ================================================================ -->
         <div id="tab-excel" class="hidden">
@@ -587,8 +662,19 @@
                 Si la pregunta ya existe, se actualizarán sus opciones y la <strong>explicación</strong>.
             </p>
             <p style="font-size: 0.85em; color: #666; margin-bottom: 10px;">
-                Columna <strong>respuesta</strong>: usa un número (0=A, 1=B, 2=C, 3=D) para opción única, o varios separados por coma (ej. <strong>0,2</strong>) para selección múltiple.
+                Columna <strong>respuesta</strong>: usa un número (0=A, 1=B, 2=C, 3=D) para opción única, o varios separados por punto y coma (ej. <strong>0;2</strong>) para selección múltiple. Evite la coma: Excel puede convertir 0,2 en un decimal.
             </p>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <label style="font-size:0.82rem; font-weight:700; color:#5f6368; display:block; margin-bottom:8px;">Plantilla de preguntas</label>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <select id="plantilla-materia" style="flex:1; min-width:200px; padding: 10px; border-radius: 5px; border: 1px solid #ddd;"></select>
+                    <button id="btn-descargar-plantilla" class="btn-secondary"><i class="fas fa-download"></i> Descargar plantilla</button>
+                </div>
+                <p style="font-size:0.78rem; color:#888; margin-top:8px;">
+                    Si elige una materia, la hoja <strong>Preguntas</strong> se descarga con la columna <strong>materia_id</strong> ya rellenada en 200 filas listas para completar.
+                    La hoja <strong>Materias</strong> del archivo lista todos los IDs válidos y la hoja <strong>Instrucciones</strong> explica cada columna.
+                </p>
+            </div>
             <input type="file" id="upload-excel" accept=".xlsx" style="margin: 20px 0;">
             <button id="btn-save-excel" class="btn-primary">Procesar y Sincronizar con Firebase</button>
         </div>
@@ -853,25 +939,62 @@
         const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
 
         // ── CONFIG DE MATERIAS ──────────────────────────────────────────
-        let materias = [];
-        try {
-            const resp = await fetch('config-materias.json');
-            const cfg = await resp.json();
-            materias = cfg.materias.filter(m => m.activa);
-        } catch {
-            materias = [
-                { id: "comp-forense",   nombre: "Computación Forense" },
-                { id: "deontologia",    nombre: "Deontología" },
-                { id: "auditoria-ti",   nombre: "Auditoría de TI" },
-                { id: "emprendimiento", nombre: "Emprendimiento e Innovación" },
-                { id: "ia",             nombre: "Inteligencia Artificial" },
-                { id: "practicas-1",    nombre: "Prácticas Laborales 1" }
-            ];
+        // Lista de respaldo: siempre disponible. Las materias guardadas en Firestore
+        // (colección "config_materias") se suman a esta lista o la sobrescriben por ID.
+        // Ya no se lee config-materias.json (estaba en /data y esta página lo buscaba en la raíz).
+        const MATERIAS_RESPALDO = [
+            { id: "comp-forense",   nombre: "Computación Forense",         icono: "fa-microscope",      color: "#1a73e8", activa: true },
+            { id: "deontologia",    nombre: "Deontología",                 icono: "fa-scale-balanced",  color: "#1a73e8", activa: true },
+            { id: "auditoria-ti",   nombre: "Auditoría de TI",             icono: "fa-clipboard-check", color: "#1a73e8", activa: true },
+            { id: "emprendimiento", nombre: "Emprendimiento e Innovación", icono: "fa-lightbulb",       color: "#1a73e8", activa: true },
+            { id: "ia",             nombre: "Inteligencia Artificial",     icono: "fa-robot",           color: "#1a73e8", activa: true },
+            { id: "practicas-1",    nombre: "Prácticas Laborales 1",       icono: "fa-briefcase",       color: "#1a73e8", activa: true }
+        ];
+        const idsRespaldo = new Set(MATERIAS_RESPALDO.map(m => m.id));
+
+        // "materias" contiene TODAS las materias (activas e inactivas) para que el administrador
+        // pueda cargar preguntas de una materia nueva antes de activarla para los alumnos.
+        let materias = MATERIAS_RESPALDO.map(m => ({ ...m }));
+        let materiasFirestoreOk = true;
+
+        function etiquetaMateria(m) {
+            return m.nombre + (m.activa === false ? ' (inactiva)' : '');
+        }
+
+        async function cargarConfigMaterias() {
+            const lista = MATERIAS_RESPALDO.map(m => ({ ...m }));
+            const nuevas = [];
+            materiasFirestoreOk = true;
+            try {
+                const snap = await getDocs(collection(db, 'config_materias'));
+                snap.forEach(d => {
+                    const datos = d.data();
+                    const idx = lista.findIndex(m => m.id === d.id);
+                    if (idx >= 0) lista[idx] = { ...lista[idx], ...datos, id: d.id };
+                    else if (datos.nombre) nuevas.push({ ...datos, id: d.id });
+                });
+            } catch (e) {
+                console.warn('No se pudo leer config_materias; se usa la lista de respaldo.', e);
+                materiasFirestoreOk = false;
+            }
+            nuevas.sort((a, b) => (a.creada || 0) - (b.creada || 0));
+            materias = [...lista, ...nuevas];
+        }
+
+        // Refresca la lista desde Firestore y vuelve a llenar todos los selectores del panel
+        async function refrescarMaterias() {
+            await cargarConfigMaterias();
+            llenarSelectMaterias('filtro-materia-crud', true);
+            llenarSelectMaterias('modal-materia', false);
+            llenarSelectImpresion();
+            llenarSelectPlantilla();
+            renderTablaMaterias();
         }
 
         // Populate selects de materias
         function llenarSelectMaterias(selectId, incluirTodas = false) {
             const sel = document.getElementById(selectId);
+            const valorPrevio = sel.value;
             sel.innerHTML = '';
             if (incluirTodas) {
                 const opt = document.createElement('option');
@@ -882,9 +1005,10 @@
             materias.forEach(m => {
                 const opt = document.createElement('option');
                 opt.value = m.id;
-                opt.textContent = m.nombre;
+                opt.textContent = etiquetaMateria(m);
                 sel.appendChild(opt);
             });
+            if (valorPrevio && materias.some(m => m.id === valorPrevio)) sel.value = valorPrevio;
         }
         llenarSelectMaterias('filtro-materia-crud', true);
         llenarSelectMaterias('modal-materia', false);
@@ -899,6 +1023,7 @@
                     return;
                 }
                 document.getElementById('admin-name').innerText = user.displayName.toUpperCase();
+                refrescarMaterias();
             } else {
                 window.location.href = 'index.html';
             }
@@ -1346,35 +1471,273 @@
         // ================================================================
         //  MÓDULO CARGAR EXCEL
         // ================================================================
+        // ================================================================
+        //  MÓDULO MATERIAS
+        // ================================================================
+        function slugMateria(texto) {
+            return String(texto).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        }
+
+        const matNombre = document.getElementById('mat-nombre');
+        const matIcono = document.getElementById('mat-icono');
+        const matColor = document.getElementById('mat-color');
+        const matActiva = document.getElementById('mat-activa');
+        const matIdEdicion = document.getElementById('mat-id-edicion');
+
+        function actualizarPreviewMateria() {
+            const prev = document.getElementById('mat-preview');
+            prev.style.background = matColor.value;
+            prev.innerHTML = `<i class="fas ${escapeHtml(matIcono.value)}"></i>`;
+            const editando = !!matIdEdicion.value;
+            const id = matIdEdicion.value || slugMateria(matNombre.value);
+            document.getElementById('mat-id-preview').innerHTML = id
+                ? `ID de la materia: <strong>${escapeHtml(id)}</strong>${editando ? ' (no cambia al editar: las preguntas quedan asociadas a este ID)' : ''}`
+                : 'El ID de la materia se genera a partir del nombre.';
+        }
+        ['input', 'change'].forEach(ev => [matNombre, matIcono, matColor].forEach(el => el.addEventListener(ev, actualizarPreviewMateria)));
+
+        function limpiarFormMateria() {
+            matIdEdicion.value = '';
+            matNombre.value = '';
+            matIcono.value = 'fa-book';
+            matColor.value = '#1a73e8';
+            matActiva.checked = true;
+            document.getElementById('mat-titulo-form').textContent = 'Nueva materia';
+            document.getElementById('btn-cancelar-materia').classList.add('hidden');
+            actualizarPreviewMateria();
+        }
+        document.getElementById('btn-cancelar-materia').onclick = limpiarFormMateria;
+
+        function mostrarErrorMateria(e) {
+            console.error(e);
+            const sinPermiso = e && (e.code === 'permission-denied' || /insufficient permissions/i.test(e.message || ''));
+            Swal.fire({
+                icon: 'error',
+                title: 'No se pudo guardar',
+                text: sinPermiso
+                    ? 'Firestore rechazó la operación. Falta la regla de seguridad para la colección "config_materias" en Firebase Console.'
+                    : (e && e.message ? e.message : 'Error desconocido.')
+            });
+        }
+
+        function renderTablaMaterias() {
+            const aviso = document.getElementById('materias-aviso');
+            if (!materiasFirestoreOk) {
+                aviso.classList.remove('hidden');
+                aviso.innerHTML = '<i class="fas fa-triangle-exclamation"></i> No se pudo leer la colección <strong>config_materias</strong> de Firestore; se muestran solo las materias de respaldo. Revise las reglas de seguridad en Firebase Console.';
+            } else {
+                aviso.classList.add('hidden');
+            }
+            document.getElementById('materias-table-body').innerHTML = materias.map(m => {
+                const activa = m.activa !== false;
+                const color = /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#1a73e8';
+                return `<tr>
+                    <td><span class="materia-swatch" style="background:${color};"><i class="fas ${escapeHtml(m.icono || 'fa-book')}"></i></span>${escapeHtml(m.nombre)}</td>
+                    <td><code>${escapeHtml(m.id)}</code></td>
+                    <td>${activa ? '<span style="color:#188038; font-weight:600;">Activa</span>' : '<span style="color:#b06000; font-weight:600;">Inactiva</span>'}</td>
+                    <td style="white-space:nowrap;">
+                        <button class="btn-edit" onclick="editarMateria('${escapeHtml(m.id)}')" title="Editar"><i class="fas fa-pen"></i></button>
+                        <button class="btn-secondary" onclick="alternarMateria('${escapeHtml(m.id)}')" title="${activa ? 'Ocultar a los alumnos' : 'Mostrar a los alumnos'}">${activa ? 'Desactivar' : 'Activar'}</button>
+                        ${idsRespaldo.has(m.id) ? '' : `<button class="btn-delete" onclick="eliminarMateria('${escapeHtml(m.id)}')" title="Eliminar"><i class="fas fa-trash"></i></button>`}
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        document.getElementById('btn-guardar-materia').onclick = async () => {
+            const nombre = matNombre.value.trim().replace(/\s+/g, ' ');
+            const idEdicion = matIdEdicion.value;
+            if (nombre.length < 3) return Swal.fire('Atención', 'Escriba el nombre de la materia (mínimo 3 caracteres).', 'warning');
+            const id = idEdicion || slugMateria(nombre);
+            if (!id) return Swal.fire('Atención', 'El nombre debe contener letras o números.', 'warning');
+            if (!idEdicion && materias.some(m => m.id === id)) {
+                return Swal.fire('Atención', `Ya existe una materia con el ID "${id}". Use otro nombre o edite la existente.`, 'warning');
+            }
+            if (materias.some(m => m.id !== id && m.nombre.trim().toLowerCase() === nombre.toLowerCase())) {
+                return Swal.fire('Atención', 'Ya existe otra materia con ese nombre.', 'warning');
+            }
+            const datos = { nombre, icono: matIcono.value, color: matColor.value, activa: matActiva.checked };
+            if (!materias.some(m => m.id === id)) datos.creada = Date.now();
+
+            const btn = document.getElementById('btn-guardar-materia');
+            btn.disabled = true;
+            try {
+                await setDoc(doc(db, 'config_materias', id), datos, { merge: true });
+                await refrescarMaterias();
+                limpiarFormMateria();
+                Swal.fire({ icon: 'success', title: 'Materia guardada', text: `ID: ${id}`, timer: 1800, showConfirmButton: false });
+            } catch (e) {
+                mostrarErrorMateria(e);
+            } finally {
+                btn.disabled = false;
+            }
+        };
+
+        window.editarMateria = (id) => {
+            const m = materias.find(x => x.id === id);
+            if (!m) return;
+            matIdEdicion.value = m.id;
+            matNombre.value = m.nombre;
+            const icono = m.icono || 'fa-book';
+            if (![...matIcono.options].some(o => o.value === icono)) matIcono.add(new Option(icono, icono));
+            matIcono.value = icono;
+            matColor.value = /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#1a73e8';
+            matActiva.checked = m.activa !== false;
+            document.getElementById('mat-titulo-form').textContent = `Editando: ${m.nombre}`;
+            document.getElementById('btn-cancelar-materia').classList.remove('hidden');
+            actualizarPreviewMateria();
+            matNombre.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            matNombre.focus();
+        };
+
+        window.alternarMateria = async (id) => {
+            const m = materias.find(x => x.id === id);
+            if (!m) return;
+            try {
+                await setDoc(doc(db, 'config_materias', id), {
+                    nombre: m.nombre, icono: m.icono || 'fa-book', color: m.color || '#1a73e8', activa: m.activa === false
+                }, { merge: true });
+                await refrescarMaterias();
+            } catch (e) {
+                mostrarErrorMateria(e);
+            }
+        };
+
+        window.eliminarMateria = async (id) => {
+            const m = materias.find(x => x.id === id);
+            if (!m || idsRespaldo.has(id)) return;
+            const r = await Swal.fire({
+                title: '¿Eliminar materia?',
+                html: `Se quitará <strong>${escapeHtml(m.nombre)}</strong> de la lista de materias.<br><small style="color:#888;">Las preguntas ya cargadas en Firestore no se borran.</small>`,
+                icon: 'warning', showCancelButton: true,
+                confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#ea4335'
+            });
+            if (!r.isConfirmed) return;
+            try {
+                await deleteDoc(doc(db, 'config_materias', id));
+                if (matIdEdicion.value === id) limpiarFormMateria();
+                await refrescarMaterias();
+            } catch (e) {
+                mostrarErrorMateria(e);
+            }
+        };
+
+        // ================================================================
+        //  PLANTILLA DE PREGUNTAS (Excel)
+        // ================================================================
+        function llenarSelectPlantilla() {
+            const sel = document.getElementById('plantilla-materia');
+            if (!sel) return;
+            const valorPrevio = sel.value;
+            sel.innerHTML = '<option value="">Plantilla general (sin materia)</option>' +
+                materias.map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(etiquetaMateria(m))}</option>`).join('');
+            if (valorPrevio && materias.some(m => m.id === valorPrevio)) sel.value = valorPrevio;
+        }
+        llenarSelectPlantilla();
+
+        document.getElementById('btn-descargar-plantilla').onclick = () => {
+            const materiaId = document.getElementById('plantilla-materia').value;
+            const idEjemplo = materiaId || 'id-de-la-materia';
+            const filas = [
+                ['materia_id', 'texto', 'opcion_0', 'opcion_1', 'opcion_2', 'opcion_3', 'respuesta', 'explicacion', 'imagen_url'],
+                [idEjemplo, '[EJEMPLO - borre esta fila] ¿Cuál es la capital de Ecuador?', 'Guayaquil', 'Quito', 'Cuenca', 'Loja', 1,
+                    'Quito es la capital y sede del gobierno nacional.', ''],
+                [idEjemplo, '[EJEMPLO - borre esta fila] Seleccione los lenguajes de programación:', 'Python', 'HTML', 'JavaScript', 'Word', '0;2',
+                    'Python y JavaScript son lenguajes de programación; HTML es un lenguaje de marcado.', '']
+            ];
+            // Con una materia elegida: 200 filas con materia_id ya rellenado (las filas sin datos se ignoran al importar)
+            if (materiaId) {
+                for (let i = 0; i < 200; i++) filas.push([materiaId, null, null, null, null, null, null, null, null]);
+            }
+            const wsPreguntas = XLSX.utils.aoa_to_sheet(filas);
+            wsPreguntas['!cols'] = [{ wch: 26 }, { wch: 60 }, { wch: 28 }, { wch: 28 }, { wch: 28 }, { wch: 28 }, { wch: 12 }, { wch: 50 }, { wch: 40 }];
+
+            const wsInstrucciones = XLSX.utils.aoa_to_sheet([
+                ['INSTRUCCIONES PARA CARGAR PREGUNTAS - QuizEli'],
+                [''],
+                ['1. Complete la hoja "Preguntas": una fila por pregunta. Las filas de ejemplo (texto que empieza con [EJEMPLO]) se omiten al importar; puede borrarlas.'],
+                ['2. materia_id: ID de la materia (vea la hoja "Materias"). Si es una materia nueva, créela primero en la pestaña Materias del panel. Para más filas, copie el materia_id hacia abajo.'],
+                ['3. texto: enunciado de la pregunta.'],
+                ['4. opcion_0 a opcion_3: las cuatro opciones (A, B, C y D); todas son obligatorias. Para una opción con imagen, escriba la ruta (ej. imagenes/grafica_a.png).'],
+                ['5. respuesta: número de la opción correcta: 0 = A, 1 = B, 2 = C, 3 = D.'],
+                ['    Selección múltiple: varios números separados por punto y coma, por ejemplo 0;2. No use coma: Excel puede convertir 0,2 en un decimal.'],
+                ['6. explicacion (opcional): por qué la respuesta es correcta.'],
+                ['7. imagen_url (opcional): enlace público de una imagen que se muestra sobre el enunciado.'],
+                ['8. Si en la misma materia ya existe una pregunta con el mismo texto, se actualizan sus opciones, respuesta y explicación.'],
+                ['9. No cambie los nombres de las columnas ni el orden de las hojas: "Preguntas" debe ser la primera.']
+            ]);
+            wsInstrucciones['!cols'] = [{ wch: 150 }];
+
+            const wsMaterias = XLSX.utils.aoa_to_sheet([
+                ['materia_id', 'Nombre de la materia', 'Estado'],
+                ...materias.map(m => [m.id, m.nombre, m.activa === false ? 'Inactiva' : 'Activa'])
+            ]);
+            wsMaterias['!cols'] = [{ wch: 28 }, { wch: 42 }, { wch: 12 }];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, wsPreguntas, 'Preguntas');
+            XLSX.utils.book_append_sheet(wb, wsInstrucciones, 'Instrucciones');
+            XLSX.utils.book_append_sheet(wb, wsMaterias, 'Materias');
+            XLSX.writeFile(wb, `Plantilla_preguntas_${materiaId || 'general'}.xlsx`);
+        };
+
+        // ================================================================
+        //  MÓDULO CARGAR EXCEL
+        // ================================================================
         let dataExcel = [];
 
+        const CAMPOS_PREGUNTA = ['texto', 'opcion_0', 'opcion_1', 'opcion_2', 'opcion_3', 'respuesta', 'explicacion', 'imagen_url'];
+        const celdaVacia = (v) => v === undefined || v === null || String(v).trim() === '';
+        const esFilaVacia = (f) => CAMPOS_PREGUNTA.every(c => celdaVacia(f[c]));
+        const esFilaEjemplo = (f) => String(f.texto || '').trim().toUpperCase().startsWith('[EJEMPLO');
+
         function validarEstructuraExcel(data) {
-            if (!data || data.length === 0) return { valido: false, mensaje: 'El archivo está vacío.' };
+            if (!data || data.length === 0) return { valido: false, mensaje: 'El archivo no tiene preguntas para cargar.' };
             const requeridos = ['materia_id', 'texto', 'opcion_0', 'opcion_1', 'opcion_2', 'opcion_3', 'respuesta'];
+            const idsValidos = new Set(materias.map(m => m.id));
+            const desconocidos = new Set();
             for (let i = 0; i < data.length; i++) {
+                const fila = data[i];
+                const nFila = fila.__fila || (i + 2);
                 for (const campo of requeridos) {
-                    if (!(campo in data[i]) || data[i][campo] === undefined || data[i][campo] === '') {
-                        return { valido: false, mensaje: `Fila ${i + 2}: Falta el campo "${campo}".` };
+                    if (!(campo in fila) || celdaVacia(fila[campo])) {
+                        return { valido: false, mensaje: `Fila ${nFila}: Falta el campo "${campo}".` };
                     }
                 }
+                const resp = String(fila.respuesta).trim();
+                if (!/^[0-3](\s*[,;]\s*[0-3])*$/.test(resp)) {
+                    return { valido: false, mensaje: `Fila ${nFila}: el valor de "respuesta" (${resp}) no es válido. Use 0, 1, 2 o 3 (0=A, 1=B, 2=C, 3=D), o varios separados por punto y coma (ej. 0;2). Si escribió 0,2 en Excel, pudo convertirse en decimal: use 0;2.` };
+                }
+                const id = String(fila.materia_id).trim();
+                if (!idsValidos.has(id)) desconocidos.add(id);
+            }
+            if (desconocidos.size > 0) {
+                return { valido: false, mensaje: `Estos materia_id no existen: ${[...desconocidos].join(', ')}. IDs válidos: ${materias.map(m => m.id).join(', ')}. Si es una materia nueva, créela primero en la pestaña Materias.` };
             }
             return { valido: true };
         }
 
         document.getElementById('upload-excel').onchange = (e) => {
             const file = e.target.files[0];
+            dataExcel = [];
+            if (!file) return;
             const reader = new FileReader();
             reader.onload = (ev) => {
                 try {
                     const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
-                    const tempData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-                    const val = validarEstructuraExcel(tempData);
+                    const tempData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]).map((f, i) => ({ ...f, __fila: i + 2 }));
+                    const conDatos = tempData.filter(f => !esFilaVacia(f));   // ignora filas con solo materia_id
+                    const ejemplos = conDatos.filter(esFilaEjemplo).length;
+                    const filas = conDatos.filter(f => !esFilaEjemplo(f));
+                    const val = validarEstructuraExcel(filas);
                     if (!val.valido) {
                         Swal.fire('Error de Plantilla', val.mensaje, 'error');
                         e.target.value = '';
                     } else {
-                        dataExcel = tempData;
-                        Swal.fire('Éxito', `Archivo cargado: ${tempData.length} preguntas listas.`, 'success');
+                        dataExcel = filas;
+                        const extra = ejemplos > 0 ? ` (se omitieron ${ejemplos} fila(s) de ejemplo)` : '';
+                        Swal.fire('Éxito', `Archivo cargado: ${filas.length} preguntas listas.${extra}`, 'success');
                     }
                 } catch (err) {
                     Swal.fire('Error', 'No se pudo leer el archivo.', 'error');
@@ -1387,28 +1750,34 @@
             if (dataExcel.length === 0) return Swal.fire('Error', 'Carga un archivo Excel primero.', 'warning');
             Swal.fire({ title: 'Sincronizando...', text: 'Actualizando base de datos en Firebase', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
             try {
-                const batch = writeBatch(db);
+                let batch = writeBatch(db);
+                let opsEnBatch = 0;   // Firestore admite máx. 500 operaciones por batch
                 let nuevas = 0; let actualizadas = 0;
                 for (const p of dataExcel) {
-                    const colRef = collection(db, `bancos_preguntas/${p.materia_id}/preguntas`);
-                    const q = query(colRef, where("texto", "==", p.texto.trim()));
+                    const materiaId = String(p.materia_id).trim();
+                    const textoPregunta = String(p.texto).trim();
+                    const rutaPreguntas = `bancos_preguntas/${materiaId}/preguntas`;
+                    const colRef = collection(db, rutaPreguntas);
+                    const q = query(colRef, where("texto", "==", textoPregunta));
                     const snap = await getDocs(q);
                     let ref;
-                    if (!snap.empty) { ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, snap.docs[0].id); actualizadas++; }
-                    else { ref = doc(db, `bancos_preguntas/${p.materia_id}/preguntas`, `p_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`); nuevas++; }
+                    if (!snap.empty) { ref = doc(db, rutaPreguntas, snap.docs[0].id); actualizadas++; }
+                    else { ref = doc(db, rutaPreguntas, `p_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`); nuevas++; }
                     const imgUrlExcel = p.imagen_url ? p.imagen_url.toString().trim() : '';
                     // Columna "respuesta": un número (0-3) para opción única, o varios separados por coma/punto y coma
-                    // para selección múltiple (ej. "0,2").
+                    // para selección múltiple (ej. "0;2").
                     const indicesRespuesta = p.respuesta.toString().split(/[,;]/)
                         .map(s => parseInt(s.trim()))
                         .filter(n => !isNaN(n))
                         .sort((a, b) => a - b);
                     const respuestaFinal = indicesRespuesta.length > 1 ? indicesRespuesta : (indicesRespuesta[0] ?? parseInt(p.respuesta));
-                    const datosExcel = { texto: p.texto.trim(), opciones: [p.opcion_0.toString().trim(), p.opcion_1.toString().trim(), p.opcion_2.toString().trim(), p.opcion_3.toString().trim()], respuesta: respuestaFinal, explicacion_correcta: p.explicacion ? p.explicacion.toString().trim() : "Consulte el material de estudio oficial." };
+                    const datosExcel = { texto: textoPregunta, opciones: [p.opcion_0.toString().trim(), p.opcion_1.toString().trim(), p.opcion_2.toString().trim(), p.opcion_3.toString().trim()], respuesta: respuestaFinal, explicacion_correcta: p.explicacion ? p.explicacion.toString().trim() : "Consulte el material de estudio oficial." };
                     if (imgUrlExcel) datosExcel.imagen_url = imgUrlExcel;
                     batch.set(ref, datosExcel);
+                    opsEnBatch++;
+                    if (opsEnBatch >= 400) { await batch.commit(); batch = writeBatch(db); opsEnBatch = 0; }
                 }
-                await batch.commit();
+                if (opsEnBatch > 0) await batch.commit();
                 Swal.fire('Proceso Terminado', `Preguntas Nuevas: ${nuevas}<br>Preguntas Actualizadas: ${actualizadas}`, 'success');
                 dataExcel = [];
                 document.getElementById('upload-excel').value = '';
@@ -1430,7 +1799,7 @@
                     <input type="checkbox" value="${m.id}" 
                            ${materiasSeleccionadas.includes(m.id) ? 'checked' : ''}
                            style="width:14px; height:14px; accent-color:#1a73e8;">
-                    ${m.nombre}
+                    ${escapeHtml(etiquetaMateria(m))}
                 </label>
             `).join('');
         }
@@ -1707,15 +2076,16 @@
         //  NAVEGACIÓN DE TABS
         // ================================================================
         window.changeTab = (id) => {
-            ['tab-preguntas', 'tab-excel', 'tab-users', 'tab-auditoria', 'tab-imprimir'].forEach(t => {
+            ['tab-preguntas', 'tab-materias', 'tab-excel', 'tab-users', 'tab-auditoria', 'tab-imprimir'].forEach(t => {
                 document.getElementById(t).classList.toggle('hidden', t !== id);
             });
             // Actualizar botones activos
-            ['btn-tab-preguntas', 'btn-tab-excel', 'btn-tab-users', 'btn-tab-auditoria', 'btn-tab-imprimir'].forEach(b => {
+            ['btn-tab-preguntas', 'btn-tab-materias', 'btn-tab-excel', 'btn-tab-users', 'btn-tab-auditoria', 'btn-tab-imprimir'].forEach(b => {
                 document.getElementById(b).classList.remove('active');
             });
             document.getElementById(`btn-tab-${id.replace('tab-', '')}`).classList.add('active');
 
+            if (id === 'tab-materias') renderTablaMaterias();
             if (id === 'tab-users') loadUsers();
             if (id === 'tab-auditoria') cargarAuditoria();
         };
@@ -1731,7 +2101,7 @@
             materias.forEach(m => {
                 const opt = document.createElement('option');
                 opt.value = m.id;
-                opt.textContent = m.nombre;
+                opt.textContent = etiquetaMateria(m);
                 sel.appendChild(opt);
             });
         }

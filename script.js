@@ -458,9 +458,10 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 // 2. CARGAR MATERIAS
-// Las materias están embebidas directamente en el script para evitar
-// errores 404 en GitHub Pages al intentar hacer fetch del JSON.
-// Si necesitas agregar/quitar materias, edita el objeto CONFIG_MATERIAS abajo.
+// La lista embebida (CONFIG_MATERIAS) se mantiene como respaldo para evitar
+// errores 404 en GitHub Pages. Las materias creadas desde el Panel Administrativo
+// se guardan en Firestore (colección "config_materias") y se suman a esta lista
+// automáticamente; no hace falta editar este archivo para agregar materias nuevas.
 const CONFIG_MATERIAS = {
   "materias": [
     { "id": "comp-forense",   "nombre": "Computación Forense",        "activa": true },
@@ -472,11 +473,31 @@ const CONFIG_MATERIAS = {
   ]
 };
 
+// Combina la lista de respaldo con las materias guardadas en Firestore.
+// Un documento de Firestore con el mismo ID sobrescribe (nombre, activa, etc.) al de respaldo.
+async function obtenerMateriasConfiguradas() {
+    const lista = CONFIG_MATERIAS.materias.map(m => ({ ...m }));
+    const nuevas = [];
+    try {
+        const snap = await getDocs(collection(db, "config_materias"));
+        snap.forEach(d => {
+            const datos = d.data();
+            const idx = lista.findIndex(m => m.id === d.id);
+            if (idx >= 0) lista[idx] = { ...lista[idx], ...datos, id: d.id };
+            else if (datos.nombre) nuevas.push({ ...datos, id: d.id });
+        });
+    } catch (e) {
+        console.warn('No se pudo leer config_materias; se usa la lista de respaldo.', e);
+    }
+    nuevas.sort((a, b) => (a.creada || 0) - (b.creada || 0));
+    return [...lista, ...nuevas];
+}
+
 async function cargarMaterias() {
     try {
-        const data = CONFIG_MATERIAS;
+        const todasLasMaterias = await obtenerMateriasConfiguradas();
 
-        let materiasVisibles = data.materias.filter(m => m.activa);
+        let materiasVisibles = todasLasMaterias.filter(m => m.activa !== false);
 
         const esAdminUser = currentUserEmail === ADMIN_EMAIL;
         if (!esAdminUser) {
