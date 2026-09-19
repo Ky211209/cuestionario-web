@@ -17,11 +17,18 @@
         <div id="user-display" class="hidden" style="display: flex; align-items: center; gap: 10px;">
             <button id="btn-header-return" class="btn-back hidden"><i class="fas fa-arrow-left"></i> <span>Volver al Menú</span></button>
             <span id="user-info"></span>
+            <button id="btn-actualizar" class="btn-secondary" title="Buscar y aplicar actualizaciones"><i class="fas fa-rotate"></i> <span>Actualizar</span></button>
             <button id="btn-logout" class="btn-secondary">Cerrar Sesión</button>
         </div>
     </header>
 
-    <div class="container" id="auth-screen">
+    <!-- Pantalla de verificación de sesión: evita mostrar "Acceder con Google" mientras Firebase recupera la sesión guardada -->
+    <div class="container" id="loading-screen">
+        <h2>Verificando sesión...</h2>
+        <p style="color:#888; margin-top:10px; font-size:0.9rem;">Un momento, por favor.</p>
+    </div>
+
+    <div class="container hidden" id="auth-screen">
         <h2>Bienvenido</h2>
         <button id="btn-login" class="btn-primary" style="margin-top: 20px;">Acceder con Google</button>
     </div>
@@ -89,6 +96,12 @@
         </div>
         <div id="question-text" style="font-weight: bold; text-align: left; margin-bottom: 20px; font-size: 1.1rem;"></div>
         <div id="options-container"></div>
+    </div>
+
+    <!-- Aviso de nueva versión (solo aparece si hay una actualización mientras se resuelve un examen o estudio) -->
+    <div id="update-banner" class="hidden">
+        <span><i class="fas fa-circle-arrow-up"></i> Hay una nueva versión. Se aplicará al volver al menú.</span>
+        <button id="btn-banner-actualizar">Actualizar ahora</button>
     </div>
 
     <!-- ✅ FIX CRÍTICO: Cargar script.js como módulo ES (necesario para los imports de Firebase) -->

@@ -322,3 +322,36 @@ th { color: #1a73e8; background: #f8f9fa; text-transform: uppercase; }
     background: #ffffff;
     flex: 1;
 }
+
+/* ACTUALIZACIÓN: aviso de nueva versión y botón del encabezado */
+#update-banner {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 1500;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 92%;
+    padding: 10px 14px;
+    background: #1a73e8;
+    color: #fff;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+#update-banner button {
+    background: #fff;
+    color: #1a73e8;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+@media (max-width: 500px) {
+    #btn-actualizar span { display: none; } /* Solo icono en móvil */
+    #btn-actualizar { padding: 6px 10px; }
+}

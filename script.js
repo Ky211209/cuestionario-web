@@ -427,6 +427,7 @@ onAuthStateChanged(auth, async (user) => {
         crearOverlay();
         registrarAcceso('inicio_sesion');
 
+        ocultarPantallaCarga();
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('setup-screen').classList.remove('hidden');
         document.getElementById('user-display').classList.remove('hidden');
@@ -447,6 +448,7 @@ onAuthStateChanged(auth, async (user) => {
 
         cargarMaterias();
     } else {
+        ocultarPantallaCarga();
         document.getElementById('auth-screen').classList.remove('hidden');
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('user-display').classList.add('hidden');
@@ -778,7 +780,7 @@ function renderQuestion() {
             text: currentMode === "study" ? 'Tu progreso se guardará automáticamente.' : 'Perderás el progreso de este examen.',
             icon: 'warning', showCancelButton: true,
             confirmButtonColor: '#1a73e8', confirmButtonText: 'Sí, volver'
-        }).then((res) => { if (res.isConfirmed) { stopTimer(); location.reload(); } });
+        }).then((res) => { if (res.isConfirmed) { stopTimer(); volverAlMenu(); } });
     };
     optionsContainer.appendChild(menuButton);
 
@@ -1047,7 +1049,7 @@ function finalizarExamen() {
             confirmButtonColor: '#1a73e8'
         }).then(async () => {
             try { await setDoc(doc(db, 'progreso_estudio', `${currentUserEmail}_${currentMateria}`), { indice: 0, actualizado: serverTimestamp() }); } catch(e) {}
-            location.reload();
+            volverAlMenu();
         });
     }
 }
@@ -1064,7 +1066,7 @@ function mostrarResultadosDetallados(correctas) {
             <p style="color:#666;">Correctas: ${correctas} / ${questions.length}</p>
         </div>
         <div id="detailed-results"></div>
-        <button onclick="location.reload()" class="btn-primary" style="margin-top:20px;">Volver al Menú</button>
+        <button onclick="volverAlMenu()" class="btn-primary" style="margin-top:20px;">Volver al Menú</button>
     `;
 
     const resultsDiv = document.getElementById('detailed-results');
@@ -1173,8 +1175,196 @@ document.getElementById('btn-header-return').onclick = () => {
     Swal.fire({
         title: '¿Volver al menú?', text: 'Se guardará tu progreso si estás en modo estudio.',
         icon: 'warning', showCancelButton: true, confirmButtonColor: '#1a73e8'
-    }).then((res) => { if (res.isConfirmed) { stopTimer(); location.reload(); } });
+    }).then((res) => { if (res.isConfirmed) { stopTimer(); volverAlMenu(); } });
 };
+
+// ================================================================
+// VOLVER AL MENÚ SIN RECARGAR LA PÁGINA
+// La sesión de Google se mantiene: solo "Cerrar Sesión" la termina.
+// ================================================================
+// Estructura original de la pantalla del quiz (la pantalla de resultados la reemplaza)
+const QUIZ_SCREEN_HTML_ORIGINAL = document.getElementById('quiz-screen').innerHTML;
+
+function ocultarPantallaCarga() {
+    const carga = document.getElementById('loading-screen');
+    if (carga) carga.classList.add('hidden');
+}
+// Plan B: si Firebase tarda demasiado en responder, se muestra el acceso con Google
+setTimeout(() => {
+    const carga = document.getElementById('loading-screen');
+    if (carga && !carga.classList.contains('hidden')) {
+        carga.classList.add('hidden');
+        if (!currentUserEmail) document.getElementById('auth-screen').classList.remove('hidden');
+    }
+}, 8000);
+
+// true mientras el popup de Google está abierto (no se debe recargar en ese momento)
+function iniciandoSesion() {
+    return !document.getElementById('auth-screen').classList.contains('hidden')
+        && document.getElementById('btn-login').disabled;
+}
+
+function hayQuizActivo() {
+    return !document.getElementById('quiz-screen').classList.contains('hidden');
+}
+
+// Recarga la lista de materias conservando la que estaba elegida (si sigue disponible)
+async function refrescarListaMaterias() {
+    const select = document.getElementById('subject-select');
+    const previo = select ? select.value : '';
+    await cargarMaterias();
+    if (previo && [...select.options].some(o => o.value === previo)) {
+        select.value = previo;
+        if (select.onchange) select.onchange();
+    }
+}
+
+function volverAlMenu() {
+    stopTimer();
+    if (hayQuizActivo()) notificarExamenTerminado();
+
+    // Limpiar el intento en curso
+    questions = []; selectedAnswers = []; currentIndex = 0;
+    currentMateria = ""; currentMode = ""; tiempoRestante = 0;
+    seleccionTemporalMultiple = [];
+    if (typeof ocultarZoomImagen === 'function') ocultarZoomImagen();
+
+    // Restaurar la pantalla del quiz y mostrar el menú
+    const quizScreen = document.getElementById('quiz-screen');
+    quizScreen.innerHTML = QUIZ_SCREEN_HTML_ORIGINAL;
+    quizScreen.classList.add('hidden');
+    document.getElementById('btn-header-return').classList.add('hidden');
+    document.getElementById('setup-screen').classList.remove('hidden');
+    document.getElementById('update-banner').classList.add('hidden');
+    window.scrollTo(0, 0);
+
+    // Materia sin seleccionar (para elegir otra) y lista de materias al día
+    cargarMaterias().finally(() => {
+        const select = document.getElementById('subject-select');
+        const btnStart = document.getElementById('btn-start');
+        if (select && btnStart && select.options.length > 1 && select.value === '') {
+            btnStart.disabled = true;
+            btnStart.textContent = 'Selecciona una materia';
+            btnStart.style.opacity = '0.5';
+        }
+    });
+
+    // Si había una versión nueva esperando, se aplica ahora que no hay examen en curso
+    if (actualizacionPendiente) programarActualizacion();
+}
+window.volverAlMenu = volverAlMenu;
+
+// ================================================================
+// ACTUALIZACIÓN AUTOMÁTICA + BOTÓN "ACTUALIZAR"
+// Cada 5 minutos (y al volver a la pestaña) se compara la versión publicada
+// de index.html, script.js y style.css con la que se cargó. Si cambió:
+//   · en el menú → se actualiza sola;
+//   · resolviendo un examen/estudio → se avisa y se aplica al volver al menú
+//     (así nunca se pierde un examen en curso).
+// Las preguntas y materias se leen de Firestore, por lo que siempre están al día.
+// ================================================================
+const ARCHIVOS_APP = ['index.html', 'script.js', 'style.css'];
+const INTERVALO_REVISION_MS = 5 * 60 * 1000;
+let firmaAppCargada = null;
+let actualizacionPendiente = false;
+let ultimaRevision = Date.now();
+
+async function obtenerFirmaApp() {
+    const partes = await Promise.all(ARCHIVOS_APP.map(async (archivo) => {
+        let r = await fetch(archivo, { method: 'HEAD', cache: 'no-store' });
+        if (!r.ok) throw new Error(`${archivo}: HTTP ${r.status}`);
+        const etag = r.headers.get('etag'), modificado = r.headers.get('last-modified');
+        if (etag || modificado) return `${archivo}|${etag || ''}|${modificado || ''}`;
+        // Servidor sin ETag/Last-Modified: se compara el contenido
+        r = await fetch(archivo, { cache: 'no-store' });
+        const txt = await r.text();
+        let h = 0;
+        for (let k = 0; k < txt.length; k++) h = (h * 31 + txt.charCodeAt(k)) | 0;
+        return `${archivo}|${txt.length}|${h}`;
+    }));
+    return partes.join('||');
+}
+
+// Devuelve 'nueva', 'igual' o 'error'
+async function comprobarActualizacion() {
+    ultimaRevision = Date.now();
+    let firma;
+    try { firma = await obtenerFirmaApp(); }
+    catch (e) { console.warn('No se pudo comprobar actualizaciones:', e); return 'error'; }
+    if (firmaAppCargada === null) { firmaAppCargada = firma; return 'igual'; }
+    return firma !== firmaAppCargada ? 'nueva' : 'igual';
+}
+
+// Descarga la versión nueva saltándose la caché del navegador y recarga (la sesión se conserva)
+async function aplicarActualizacion() {
+    try {
+        sessionStorage.setItem('ultima_actualizacion', String(Date.now()));
+        await Promise.all(ARCHIVOS_APP.map(a => fetch(a, { cache: 'reload' })));
+    } catch (e) { console.warn('No se pudo precargar la versión nueva:', e); }
+    location.reload();
+}
+
+function programarActualizacion() {
+    Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'Nueva versión disponible',
+                text: 'Actualizando…', timer: 1500, showConfirmButton: false });
+    setTimeout(aplicarActualizacion, 1300);
+}
+
+async function revisionAutomatica() {
+    if (document.visibilityState !== 'visible') return;
+    const estado = await comprobarActualizacion();
+    if (estado === 'nueva') {
+        const recienActualizado = Date.now() - Number(sessionStorage.getItem('ultima_actualizacion') || 0) < 60000;
+        if (recienActualizado) return;                       // evita bucles de recarga
+        actualizacionPendiente = true;
+        if (hayQuizActivo()) {
+            document.getElementById('update-banner').classList.remove('hidden');
+        } else if (!Swal.isVisible() && !iniciandoSesion()) {
+            programarActualizacion();
+        }
+    } else if (estado === 'igual' && !hayQuizActivo()) {
+        // En el menú: mantener la lista de materias al día (sin molestar si el selector está en uso)
+        const select = document.getElementById('subject-select');
+        const enMenu = !document.getElementById('setup-screen').classList.contains('hidden');
+        if (enMenu && select && document.activeElement !== select) refrescarListaMaterias();
+    }
+}
+
+async function accionBotonActualizar() {
+    const icono = document.querySelector('#btn-actualizar i');
+    if (icono) icono.classList.add('fa-spin');
+    const estado = actualizacionPendiente ? 'nueva' : await comprobarActualizacion();
+    if (icono) icono.classList.remove('fa-spin');
+
+    if (estado === 'error') {
+        Swal.fire({ icon: 'info', title: 'No se pudo comprobar', text: 'Revise su conexión a Internet e intente de nuevo.', confirmButtonColor: '#1a73e8' });
+        return;
+    }
+    if (estado === 'nueva') {
+        const enQuiz = hayQuizActivo();
+        const avisoQuiz = currentMode === 'study' ? 'Su progreso de estudio está guardado.' : 'Perderá el avance de este examen.';
+        const r = await Swal.fire({
+            icon: 'info', title: 'Nueva versión disponible',
+            text: enQuiz ? `Se recargará la página. ${avisoQuiz}` : 'Se recargará la página para aplicarla. Su sesión se mantiene.',
+            showCancelButton: true, confirmButtonText: 'Actualizar ahora', cancelButtonText: 'Más tarde', confirmButtonColor: '#1a73e8'
+        });
+        if (r.isConfirmed) { stopTimer(); await aplicarActualizacion(); }
+        return;
+    }
+    if (!hayQuizActivo()) await refrescarListaMaterias();
+    Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Ya tiene la versión más reciente', timer: 2500, showConfirmButton: false });
+}
+
+document.getElementById('btn-actualizar').onclick = accionBotonActualizar;
+document.getElementById('btn-banner-actualizar').onclick = accionBotonActualizar;
+
+// Versión con la que se cargó esta página (línea base para detectar cambios)
+obtenerFirmaApp().then(f => { if (firmaAppCargada === null) firmaAppCargada = f; }).catch(() => {});
+setInterval(revisionAutomatica, INTERVALO_REVISION_MS);
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && Date.now() - ultimaRevision > 60000) revisionAutomatica();
+});
+window.addEventListener('online', revisionAutomatica);
 
 // ================================================================
 // BOTÓN LOGIN — signInWithPopup (móvil y escritorio)
