@@ -515,7 +515,7 @@ async function obtenerMateriasConfiguradas() {
         console.warn('No se pudo leer config_materias; se usa la lista de respaldo.', e);
     }
     nuevas.sort((a, b) => (a.creada || 0) - (b.creada || 0));
-    return [...lista, ...nuevas];
+    return [...lista, ...nuevas].filter(m => m.eliminada !== true);   // las eliminadas desde el panel no se muestran
 }
 
 // ================================================================

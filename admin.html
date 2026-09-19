@@ -680,6 +680,10 @@
                     <input type="checkbox" id="mat-activa" checked style="width:15px; height:15px; accent-color:#1a73e8;">
                     Visible para los alumnos (activa)
                 </label>
+                <label id="mat-regenerar-fila" class="hidden" style="display:flex; align-items:flex-start; gap:8px; font-size:0.85rem; cursor:pointer; margin-bottom:8px;">
+                    <input type="checkbox" id="mat-regenerar-id" style="width:15px; height:15px; margin-top:2px; accent-color:#1a73e8;">
+                    <span>Cambiar el ID según el nombre nuevo <small style="color:#888;">(solo si la materia aún no tiene preguntas cargadas)</small></span>
+                </label>
                 <p id="mat-id-preview" style="font-size:0.78rem; color:#888; margin-bottom:10px;">El ID de la materia se genera a partir del nombre.</p>
 
                 <div style="display:flex; gap:10px;">
@@ -692,6 +696,11 @@
                 <thead><tr><th>Materia</th><th>Semestre</th><th>ID</th><th>Estado</th><th>Acciones</th></tr></thead>
                 <tbody id="materias-table-body"></tbody>
             </table>
+
+            <div id="materias-eliminadas" class="hidden" style="margin-top:20px; background:#f8f9fa; border-radius:8px; padding:12px 14px;">
+                <p style="font-size:0.82rem; font-weight:700; color:#5f6368; margin-bottom:8px;">Materias de la malla eliminadas</p>
+                <div id="lista-eliminadas"></div>
+            </div>
         </div>
 
         <!-- ================================================================
@@ -970,7 +979,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, getDocs, writeBatch, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, getDocs, getCountFromServer, writeBatch, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
         const app = initializeApp(firebaseConfig);
@@ -1015,6 +1024,7 @@
         // "materias" contiene TODAS las materias (activas e inactivas) para que el administrador
         // pueda cargar preguntas de una materia nueva antes de activarla para los alumnos.
         let materias = MATERIAS_RESPALDO.map(m => ({ ...m }));
+        let materiasEliminadas = [];   // materias de la malla que se quitaron (se pueden restaurar)
         let materiasFirestoreOk = true;
 
         function etiquetaMateria(m) {
@@ -1038,7 +1048,9 @@
                 materiasFirestoreOk = false;
             }
             nuevas.sort((a, b) => (a.creada || 0) - (b.creada || 0));
-            materias = [...lista, ...nuevas];
+            const todas = [...lista, ...nuevas];
+            materiasEliminadas = todas.filter(m => m.eliminada === true);
+            materias = todas.filter(m => m.eliminada !== true);
         }
 
         // Refresca la lista desde Firestore y vuelve a llenar todos los selectores del panel
@@ -1549,6 +1561,8 @@
         const matPortadaArchivo = document.getElementById('mat-portada-archivo');
         const matPortadaPreview = document.getElementById('mat-portada-preview');
         const btnQuitarPortada = document.getElementById('btn-quitar-portada');
+        const matRegenerarFila = document.getElementById('mat-regenerar-fila');
+        const matRegenerarId = document.getElementById('mat-regenerar-id');
         let portadaNueva = null;      // imagen elegida (data URL) que aún no se guarda
         let quitarPortada = false;    // true si se pidió quitar la portada actual
 
@@ -1630,12 +1644,17 @@
             prev.style.background = matColor.value;
             prev.innerHTML = `<i class="fas ${escapeHtml(matIcono.value)}"></i>`;
             const editando = !!matIdEdicion.value;
-            const id = matIdEdicion.value || slugMateria(matNombre.value);
-            document.getElementById('mat-id-preview').innerHTML = id
-                ? `ID de la materia: <strong>${escapeHtml(id)}</strong>${editando ? ' (no cambia al editar: las preguntas quedan asociadas a este ID)' : ''}`
-                : 'El ID de la materia se genera a partir del nombre.';
+            const regenerar = editando && matRegenerarId.checked;
+            const id = regenerar ? slugMateria(matNombre.value) : (matIdEdicion.value || slugMateria(matNombre.value));
+            let texto = 'El ID de la materia se genera a partir del nombre.';
+            if (id && regenerar && id !== matIdEdicion.value) {
+                texto = `ID nuevo: <strong>${escapeHtml(id)}</strong> (antes: ${escapeHtml(matIdEdicion.value)}). Úselo en la columna materia_id del Excel.`;
+            } else if (id) {
+                texto = `ID de la materia: <strong>${escapeHtml(id)}</strong>${editando ? ' (no cambia al editar: las preguntas quedan asociadas a este ID)' : ''}`;
+            }
+            document.getElementById('mat-id-preview').innerHTML = texto;
         }
-        ['input', 'change'].forEach(ev => [matNombre, matIcono, matColor].forEach(el => el.addEventListener(ev, actualizarPreviewMateria)));
+        ['input', 'change'].forEach(ev => [matNombre, matIcono, matColor, matRegenerarId].forEach(el => el.addEventListener(ev, actualizarPreviewMateria)));
 
         function limpiarFormMateria() {
             matIdEdicion.value = '';
@@ -1646,6 +1665,8 @@
             matSemestre.value = '';
             matCodigo.value = '';
             portadaNueva = null; quitarPortada = false; matPortadaArchivo.value = '';
+            matRegenerarId.checked = false;
+            matRegenerarFila.classList.add('hidden');
             mostrarPreviewPortada(null);
             document.getElementById('mat-titulo-form').textContent = 'Nueva materia';
             document.getElementById('btn-cancelar-materia').classList.add('hidden');
@@ -1684,44 +1705,102 @@
                     <td style="white-space:nowrap;">
                         <button class="btn-edit" onclick="editarMateria('${escapeHtml(m.id)}')" title="Editar"><i class="fas fa-pen"></i></button>
                         <button class="btn-secondary" onclick="alternarMateria('${escapeHtml(m.id)}')" title="${activa ? 'Ocultar a los alumnos' : 'Mostrar a los alumnos'}">${activa ? 'Desactivar' : 'Activar'}</button>
-                        ${idsRespaldo.has(m.id) ? '' : `<button class="btn-delete" onclick="eliminarMateria('${escapeHtml(m.id)}')" title="Eliminar"><i class="fas fa-trash"></i></button>`}
+                        <button class="btn-delete" onclick="eliminarMateria('${escapeHtml(m.id)}')" title="Eliminar"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>`;
             }).join('');
+
+            const cajaEliminadas = document.getElementById('materias-eliminadas');
+            if (materiasEliminadas.length) {
+                cajaEliminadas.classList.remove('hidden');
+                document.getElementById('lista-eliminadas').innerHTML = materiasEliminadas.map(m => `
+                    <div style="display:flex; align-items:center; gap:10px; padding:5px 0; font-size:0.85rem;">
+                        <span style="flex:1;">${escapeHtml(m.nombre)}${m.semestre ? ' · ' + m.semestre + '.º' : ''}</span>
+                        <button class="btn-secondary" onclick="restaurarMateria('${escapeHtml(m.id)}')">Restaurar</button>
+                    </div>`).join('');
+            } else {
+                cajaEliminadas.classList.add('hidden');
+            }
+        }
+
+        // Cambia el ID de una materia en las fichas de alumnos que la tienen asignada
+        async function reemplazarMateriaEnAlumnos(idViejo, idNuevo) {
+            try {
+                const snap = await getDocs(collection(db, 'usuarios_seguros'));
+                for (const d of snap.docs) {
+                    const lista = d.data().materias;
+                    if (Array.isArray(lista) && lista.includes(idViejo)) {
+                        const nueva = [...new Set(lista.map(x => (x === idViejo ? idNuevo : x)))];
+                        await updateDoc(doc(db, 'usuarios_seguros', d.id), { materias: nueva });
+                    }
+                }
+            } catch (e) { console.warn('No se pudieron actualizar las fichas de alumnos:', e); }
         }
 
         document.getElementById('btn-guardar-materia').onclick = async () => {
             const nombre = matNombre.value.trim().replace(/\s+/g, ' ');
             const idEdicion = matIdEdicion.value;
             if (nombre.length < 3) return Swal.fire('Atención', 'Escriba el nombre de la materia (mínimo 3 caracteres).', 'warning');
-            const id = idEdicion || slugMateria(nombre);
-            if (!id) return Swal.fire('Atención', 'El nombre debe contener letras o números.', 'warning');
-            if (!idEdicion && materias.some(m => m.id === id)) {
-                return Swal.fire('Atención', `Ya existe una materia con el ID "${id}". Use otro nombre o edite la existente.`, 'warning');
+            const idDelNombre = slugMateria(nombre);
+            if (!idDelNombre) return Swal.fire('Atención', 'El nombre debe contener letras o números.', 'warning');
+            const cambiaId = !!idEdicion && matRegenerarId.checked && !idsRespaldo.has(idEdicion) && idDelNombre !== idEdicion;
+            const id = cambiaId ? idDelNombre : (idEdicion || idDelNombre);
+            if ((!idEdicion || cambiaId) && materias.some(m => m.id === id)) {
+                return Swal.fire('Atención', `Ya existe una materia con el ID "${id}". ${cambiaId ? 'Elimine esa materia primero o use otro nombre.' : 'Use otro nombre o edite la existente.'}`, 'warning');
             }
-            if (materias.some(m => m.id !== id && m.nombre.trim().toLowerCase() === nombre.toLowerCase())) {
+            if (materias.some(m => m.id !== id && m.id !== idEdicion && m.nombre.trim().toLowerCase() === nombre.toLowerCase())) {
                 return Swal.fire('Atención', 'Ya existe otra materia con ese nombre.', 'warning');
             }
+            const original = materias.find(m => m.id === idEdicion);
             const datos = {
                 nombre, icono: matIcono.value, color: matColor.value, activa: matActiva.checked,
                 semestre: matSemestre.value ? Number(matSemestre.value) : null,
-                codigo: matCodigo.value.trim()
+                codigo: matCodigo.value.trim(),
+                eliminada: false        // si el ID pertenecía a una materia eliminada de la malla, la vuelve a habilitar
             };
-            if (!materias.some(m => m.id === id)) datos.creada = Date.now();
+            if (cambiaId) datos.creada = (original && original.creada) || Date.now();
+            else if (!materias.some(m => m.id === id)) datos.creada = Date.now();
 
             const btn = document.getElementById('btn-guardar-materia');
             btn.disabled = true;
             try {
+                if (cambiaId) {
+                    const cant = (await getCountFromServer(collection(db, `bancos_preguntas/${idEdicion}/preguntas`))).data().count;
+                    if (cant > 0) {
+                        throw new Error(`Esta materia ya tiene ${cant} preguntas cargadas con el ID "${idEdicion}". Cambiar el ID exigiría mover esas preguntas: cree una materia nueva con el nombre correcto y vuelva a cargar el Excel.`);
+                    }
+                    const conf = await Swal.fire({
+                        title: '¿Cambiar el ID de la materia?',
+                        html: `El ID pasará de <code>${escapeHtml(idEdicion)}</code> a <code>${escapeHtml(id)}</code>.<br><small style="color:#888;">Use el ID nuevo en la columna <strong>materia_id</strong> del Excel.</small>`,
+                        icon: 'question', showCancelButton: true, confirmButtonText: 'Sí, cambiar', cancelButtonText: 'Cancelar', confirmButtonColor: '#1a73e8'
+                    });
+                    if (!conf.isConfirmed) return;
+                }
+
                 const refPortada = doc(db, 'config_materias', id, 'recursos', 'portada');
+                let portadaHeredada = null;
+                if (cambiaId && !portadaNueva && !quitarPortada && original && original.portada_v) {
+                    const p = await getDoc(doc(db, 'config_materias', idEdicion, 'recursos', 'portada'));
+                    if (p.exists()) portadaHeredada = p.data();
+                }
                 if (portadaNueva) {
                     datos.portada_v = Date.now();
                     // primero la imagen y después la versión, para que el simulador nunca lea una versión sin imagen
                     await setDoc(refPortada, { dataUrl: portadaNueva, v: datos.portada_v });
+                } else if (portadaHeredada) {
+                    datos.portada_v = portadaHeredada.v || original.portada_v;
+                    await setDoc(refPortada, { dataUrl: portadaHeredada.dataUrl, v: datos.portada_v });
                 } else if (quitarPortada) {
                     datos.portada_v = null;
                 }
                 await setDoc(doc(db, 'config_materias', id), datos, { merge: true });
-                if (!portadaNueva && quitarPortada) { try { await deleteDoc(refPortada); } catch (_) {} }
+                if (!portadaNueva && !portadaHeredada && quitarPortada) { try { await deleteDoc(refPortada); } catch (_) {} }
+
+                if (cambiaId) {   // quitar el registro anterior y actualizar las fichas de alumnos
+                    try { await deleteDoc(doc(db, 'config_materias', idEdicion, 'recursos', 'portada')); } catch (_) {}
+                    await deleteDoc(doc(db, 'config_materias', idEdicion));
+                    await reemplazarMateriaEnAlumnos(idEdicion, id);
+                }
                 await refrescarMaterias();
                 limpiarFormMateria();
                 Swal.fire({ icon: 'success', title: 'Materia guardada', text: `ID: ${id}`, timer: 1800, showConfirmButton: false });
@@ -1745,6 +1824,8 @@
             matSemestre.value = m.semestre ? String(m.semestre) : '';
             matCodigo.value = m.codigo || '';
             portadaNueva = null; quitarPortada = false;
+            matRegenerarId.checked = false;
+            matRegenerarFila.classList.toggle('hidden', idsRespaldo.has(m.id));   // los ID de la malla son fijos
             mostrarPreviewPortada(null);
             document.getElementById('mat-titulo-form').textContent = `Editando: ${m.nombre}`;
             document.getElementById('btn-cancelar-materia').classList.remove('hidden');
@@ -1774,17 +1855,33 @@
 
         window.eliminarMateria = async (id) => {
             const m = materias.find(x => x.id === id);
-            if (!m || idsRespaldo.has(id)) return;
+            if (!m) return;
+            const esMalla = idsRespaldo.has(id);
             const r = await Swal.fire({
                 title: '¿Eliminar materia?',
-                html: `Se quitará <strong>${escapeHtml(m.nombre)}</strong> de la lista de materias.<br><small style="color:#888;">Las preguntas ya cargadas en Firestore no se borran.</small>`,
+                html: `Se quitará <strong>${escapeHtml(m.nombre)}</strong> del simulador y del panel.<br><small style="color:#888;">Las preguntas ya cargadas no se borran.${esMalla ? ' Podrá restaurarla desde "Materias de la malla eliminadas".' : ''}</small>`,
                 icon: 'warning', showCancelButton: true,
                 confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#ea4335'
             });
             if (!r.isConfirmed) return;
             try {
-                await deleteDoc(doc(db, 'config_materias', id));
+                if (esMalla) {
+                    // La malla viene incluida en el código: se marca como eliminada para ocultarla en todas partes
+                    await setDoc(doc(db, 'config_materias', id), { eliminada: true, portada_v: null }, { merge: true });
+                } else {
+                    await deleteDoc(doc(db, 'config_materias', id));
+                }
+                try { await deleteDoc(doc(db, 'config_materias', id, 'recursos', 'portada')); } catch (_) {}
                 if (matIdEdicion.value === id) limpiarFormMateria();
+                await refrescarMaterias();
+            } catch (e) {
+                mostrarErrorMateria(e);
+            }
+        };
+
+        window.restaurarMateria = async (id) => {
+            try {
+                await setDoc(doc(db, 'config_materias', id), { eliminada: false }, { merge: true });
                 await refrescarMaterias();
             } catch (e) {
                 mostrarErrorMateria(e);
