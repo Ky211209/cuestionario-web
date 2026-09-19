@@ -7,6 +7,9 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <header>
@@ -34,59 +37,93 @@
     </div>
 
     <div class="container hidden" id="setup-screen">
-        <!-- Tarjeta de bienvenida -->
-        <div id="user-welcome-card" style="
-            background: linear-gradient(135deg, #1a73e8, #1557b0);
-            color: white;
-            border-radius: 10px;
-            padding: 12px 16px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            text-align: left;
-        ">
-            <i class="fas fa-user-circle" style="font-size: 2rem; opacity: 0.9; flex-shrink:0;"></i>
-            <div style="min-width:0;">
-                <div id="user-welcome-name" style="font-weight: 700; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
-                <div id="user-welcome-sub" style="font-size: 0.75rem; opacity: 0.8; margin-top: 2px;"></div>
+        <!-- Saludo -->
+        <div id="user-welcome-card" class="menu-hero">
+            <div class="hero-text">
+                <h2 id="user-welcome-name"></h2>
+                <p id="user-welcome-sub"></p>
+            </div>
+            <p class="hero-hint">Elige una materia para practicar en modo Examen o Estudio.</p>
+        </div>
+
+        <!-- Buscador y filtros -->
+        <div class="menu-toolbar">
+            <label class="menu-search">
+                <i class="fas fa-magnifying-glass"></i>
+                <input type="search" id="menu-buscar" placeholder="Buscar materia o código" autocomplete="off">
+            </label>
+            <div class="menu-chips" id="menu-chips" role="group" aria-label="Filtrar por semestre"></div>
+            <label class="menu-toggle">
+                <input type="checkbox" id="menu-solo-preguntas">
+                <span>Solo con preguntas</span>
+            </label>
+        </div>
+
+        <!-- Materias agrupadas por semestre (las genera script.js) -->
+        <div id="menu-secciones"></div>
+        <p id="menu-vacio" class="menu-vacio hidden"></p>
+
+        <!-- Panel de inicio: se abre al tocar una tarjeta -->
+        <div id="launch-panel" class="hidden" role="dialog" aria-modal="true" aria-labelledby="launch-title">
+            <div class="launch-card" id="launch-card">
+                <div class="launch-cover" id="launch-cover">
+                    <img id="launch-img" alt="" class="hidden">
+                    <i id="launch-icon" class="fas fa-book launch-icon"></i>
+                    <button type="button" id="launch-close" class="launch-close" aria-label="Cerrar"><i class="fas fa-xmark"></i></button>
+                </div>
+                <div class="launch-body">
+                    <p id="launch-meta" class="launch-meta"></p>
+                    <h3 id="launch-title"></h3>
+
+                    <div class="mode-cards" role="group" aria-label="Modo">
+                        <button type="button" class="mode-card active" data-mode="exam">
+                            <i class="fas fa-stopwatch"></i>
+                            <strong>Examen</strong>
+                            <span>20 preguntas al azar con tiempo límite</span>
+                        </button>
+                        <button type="button" class="mode-card" data-mode="study">
+                            <i class="fas fa-book-open-reader"></i>
+                            <strong>Estudio</strong>
+                            <span>Banco de preguntas con explicación al responder</span>
+                        </button>
+                    </div>
+
+                    <!-- TIEMPO: Examen → 20/30/60 min | Estudio → 20/30/60 min + Sin límite -->
+                    <div id="tiempo-container" class="launch-field">
+                        <label for="tiempo-select">Tiempo límite</label>
+                        <select id="tiempo-select">
+                            <option value="20">20 minutos</option>
+                            <option value="30">30 minutos</option>
+                            <option value="60">60 minutos</option>
+                            <!-- Esta opción solo se muestra en modo Estudio -->
+                            <option id="opcion-sin-limite" value="0" style="display:none;">Sin límite de tiempo</option>
+                        </select>
+                    </div>
+
+                    <!-- CANTIDAD: solo visible en modo Estudio -->
+                    <div id="cantidad-container" class="launch-field" style="display: none;">
+                        <label for="cantidad-select">Cantidad de preguntas</label>
+                        <select id="cantidad-select">
+                            <option value="20">20 preguntas</option>
+                            <option value="todas">Todas las preguntas</option>
+                        </select>
+                    </div>
+
+                    <button id="btn-start" class="btn-primary full-width">Iniciar examen</button>
+                </div>
             </div>
         </div>
-        <div style="text-align: left; margin-bottom: 15px;">
-            <label style="font-weight: bold; display: block; margin-bottom: 5px;">Materia</label>
-            <select id="subject-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;"></select>
-        </div>
-        <div style="text-align: left; margin-bottom: 15px;">
-            <label style="font-weight: bold; display: block; margin-bottom: 5px;">Modo</label>
-            <select id="mode-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
-                <option value="exam">📝 Examen (20 Preguntas)</option>
-                <option value="study">📚 Estudio (Banco de preguntas)</option>
+
+        <!-- Controles heredados (ocultos): el resto del script sigue leyendo estos valores -->
+        <div class="hidden" aria-hidden="true">
+            <select id="subject-select"></select>
+            <select id="mode-select">
+                <option value="exam">Examen</option>
+                <option value="study">Estudio</option>
             </select>
         </div>
 
-        <!-- TIEMPO: Examen → 20/30/60 min | Estudio → 20/30/60 min + Sin límite -->
-        <div id="tiempo-container" style="text-align: left; margin-bottom: 15px;">
-            <label style="font-weight: bold; display: block; margin-bottom: 5px;">⏱ Tiempo límite</label>
-            <select id="tiempo-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
-                <option value="20">20 minutos</option>
-                <option value="30">30 minutos</option>
-                <option value="60">60 minutos</option>
-                <!-- Esta opción solo se muestra en modo Estudio -->
-                <option id="opcion-sin-limite" value="0" style="display:none;">♾ Sin límite de tiempo</option>
-            </select>
-        </div>
-
-        <!-- CANTIDAD: Solo visible en modo Estudio -->
-        <div id="cantidad-container" style="text-align: left; margin-bottom: 20px; display: none;">
-            <label style="font-weight: bold; display: block; margin-bottom: 5px;">📋 Cantidad de preguntas</label>
-            <select id="cantidad-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
-                <option value="20">20 preguntas</option>
-                <option value="todas">Todas las preguntas</option>
-            </select>
-        </div>
-
-        <button id="btn-start" class="btn-primary" disabled>Selecciona una materia</button>
-        <p id="admin-link-container" class="hidden" style="display: none;"><a href="admin.html" style="font-size: 0.8rem; color: #888; text-decoration: none; margin-top: 15px; display: inline-block;">Panel Administrativo</a></p>
+        <p id="admin-link-container" class="hidden" style="display: none;"><a href="admin.html" class="admin-link">Panel Administrativo</a></p>
     </div>
 
     <div class="container hidden" id="quiz-screen">

@@ -464,6 +464,23 @@
             font-weight: 700;
         }
 
+        /* Vista previa de la portada (pestaña Materias) */
+        .portada-preview {
+            width: 160px;
+            aspect-ratio: 16 / 9;
+            border-radius: 8px;
+            border: 1px dashed #c5cbd6;
+            background: #f1f3f6;
+            color: #9aa3b2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.6rem;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .portada-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
         /* Icono de materia (pestaña Materias) */
         .materia-swatch {
             display: inline-flex;
@@ -635,6 +652,30 @@
                     <span id="mat-preview" class="materia-swatch" style="width:40px; height:40px; font-size:1rem;"><i class="fas fa-book"></i></span>
                 </div>
 
+                <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+                    <select id="mat-semestre" style="flex:1; min-width:150px; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                        <option value="">Sin semestre</option>
+                        <option value="1">1.º semestre</option><option value="2">2.º semestre</option>
+                        <option value="3">3.º semestre</option><option value="4">4.º semestre</option>
+                        <option value="5">5.º semestre</option><option value="6">6.º semestre</option>
+                        <option value="7">7.º semestre</option><option value="8">8.º semestre</option>
+                        <option value="9">9.º semestre</option><option value="10">10.º semestre</option>
+                    </select>
+                    <input type="text" id="mat-codigo" maxlength="20" placeholder="Código (ej. TI06-03), opcional" style="flex:1; min-width:150px; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                </div>
+
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:0.82rem; font-weight:700; color:#5f6368; display:block; margin-bottom:6px;">Imagen de portada de la tarjeta</label>
+                    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                        <div id="mat-portada-preview" class="portada-preview"><i class="fas fa-image"></i></div>
+                        <div style="flex:1; min-width:200px;">
+                            <input type="file" id="mat-portada-archivo" accept="image/*" style="font-size:0.85rem; max-width:100%;">
+                            <button type="button" id="btn-quitar-portada" class="btn-secondary hidden" style="margin-top:6px;"><i class="fas fa-trash-can"></i> Quitar imagen</button>
+                            <p style="font-size:0.75rem; color:#888; margin-top:4px;">Se recorta automáticamente en formato horizontal 16:9 y se comprime. Use imágenes horizontales; el cambio se ve en el simulador al guardar.</p>
+                        </div>
+                    </div>
+                </div>
+
                 <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; cursor:pointer; margin-bottom:8px;">
                     <input type="checkbox" id="mat-activa" checked style="width:15px; height:15px; accent-color:#1a73e8;">
                     Visible para los alumnos (activa)
@@ -648,7 +689,7 @@
             </div>
 
             <table>
-                <thead><tr><th>Materia</th><th>ID</th><th>Estado</th><th>Acciones</th></tr></thead>
+                <thead><tr><th>Materia</th><th>Semestre</th><th>ID</th><th>Estado</th><th>Acciones</th></tr></thead>
                 <tbody id="materias-table-body"></tbody>
             </table>
         </div>
@@ -929,7 +970,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, updateDoc, deleteDoc, addDoc, collection, getDocs, writeBatch, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, getDocs, writeBatch, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyAMQpnPJSdicgo5gungVOE0M7OHwkz4P9Y", authDomain: "autenticacion-8faac.firebaseapp.com", projectId: "autenticacion-8faac", storageBucket: "autenticacion-8faac.firebasestorage.app", appId: "1:939518706600:web:d28c3ec7de21da8379939d" };
         const app = initializeApp(firebaseConfig);
@@ -939,16 +980,35 @@
         const ADMIN_EMAIL = "kholguinb2@unemi.edu.ec";
 
         // ── CONFIG DE MATERIAS ──────────────────────────────────────────
-        // Lista de respaldo: siempre disponible. Las materias guardadas en Firestore
+        // Lista de respaldo: siempre disponible (incluye la malla curricular con semestre y código). Las materias guardadas en Firestore
         // (colección "config_materias") se suman a esta lista o la sobrescriben por ID.
         // Ya no se lee config-materias.json (estaba en /data y esta página lo buscaba en la raíz).
         const MATERIAS_RESPALDO = [
-            { id: "comp-forense",   nombre: "Computación Forense",         icono: "fa-microscope",      color: "#1a73e8", activa: true },
-            { id: "deontologia",    nombre: "Deontología",                 icono: "fa-scale-balanced",  color: "#1a73e8", activa: true },
-            { id: "auditoria-ti",   nombre: "Auditoría de TI",             icono: "fa-clipboard-check", color: "#1a73e8", activa: true },
-            { id: "emprendimiento", nombre: "Emprendimiento e Innovación", icono: "fa-lightbulb",       color: "#1a73e8", activa: true },
-            { id: "ia",             nombre: "Inteligencia Artificial",     icono: "fa-robot",           color: "#1a73e8", activa: true },
-            { id: "practicas-1",    nombre: "Prácticas Laborales 1",       icono: "fa-briefcase",       color: "#1a73e8", activa: true }
+                { id: "gestion-de-base-de-datos", nombre: "Gestión de Base de Datos", codigo: "", semestre: 5, icono: "fa-database", color: "#1a73e8", activa: true },
+                { id: "diseno-de-investigacion", nombre: "Diseño de Investigación", codigo: "TI06-01", semestre: 6, icono: "fa-magnifying-glass", color: "#1a73e8", activa: true },
+                { id: "mineria-de-datos", nombre: "Minería de Datos", codigo: "TI06-02", semestre: 6, icono: "fa-gem", color: "#1a73e8", activa: true },
+                { id: "tecnologias-de-conmutacion-y-enrutamiento", nombre: "Tecnologías de Conmutación y Enrutamiento", codigo: "TI06-03", semestre: 6, icono: "fa-network-wired", color: "#1a73e8", activa: true },
+                { id: "desarrollo-de-aplicaciones-web", nombre: "Desarrollo de Aplicaciones Web", codigo: "TI06-04", semestre: 6, icono: "fa-laptop-code", color: "#1a73e8", activa: true },
+                { id: "ingenieria-de-software-ii", nombre: "Ingeniería de Software II", codigo: "TI06-05", semestre: 6, icono: "fa-code-branch", color: "#1a73e8", activa: true },
+                { id: "liderazgo", nombre: "Liderazgo", codigo: "TI06-06", semestre: 6, icono: "fa-users", color: "#1a73e8", activa: true },
+                { id: "gestion-de-proyectos-informaticos", nombre: "Gestión de Proyectos Informáticos", codigo: "TI07-01", semestre: 7, icono: "fa-diagram-project", color: "#1a73e8", activa: true },
+                { id: "inteligencia-de-negocios", nombre: "Inteligencia de Negocios", codigo: "TI07-02", semestre: 7, icono: "fa-chart-line", color: "#1a73e8", activa: true },
+                { id: "escalabilidad-y-redes", nombre: "Escalabilidad y Redes", codigo: "TI07-03", semestre: 7, icono: "fa-sitemap", color: "#1a73e8", activa: true },
+                { id: "seguridad-informatica", nombre: "Seguridad Informática", codigo: "TI07-04", semestre: 7, icono: "fa-shield-halved", color: "#1a73e8", activa: true },
+                { id: "administracion-y-organizacion-empresarial", nombre: "Administración y Organización Empresarial", codigo: "TI07-05", semestre: 7, icono: "fa-building", color: "#1a73e8", activa: true },
+                { id: "practicas-servicio-comunitario", nombre: "Prácticas de Servicio Comunitario", codigo: "", semestre: 7, icono: "fa-hand-holding-heart", color: "#1a73e8", activa: true },
+                { id: "comp-forense", nombre: "Computación Forense", codigo: "TI08-01", semestre: 8, icono: "fa-microscope", color: "#1a73e8", activa: true },
+                { id: "ia", nombre: "Inteligencia Artificial", codigo: "TI08-02", semestre: 8, icono: "fa-robot", color: "#1a73e8", activa: true },
+                { id: "emprendimiento", nombre: "Emprendimiento e Innovación", codigo: "TI08-03", semestre: 8, icono: "fa-lightbulb", color: "#1a73e8", activa: true },
+                { id: "auditoria-ti", nombre: "Auditoría de TI", codigo: "TI08-04", semestre: 8, icono: "fa-clipboard-check", color: "#1a73e8", activa: true },
+                { id: "deontologia", nombre: "Deontología", codigo: "TI08-05", semestre: 8, icono: "fa-scale-balanced", color: "#1a73e8", activa: true },
+                { id: "practicas-1", nombre: "Prácticas Laborales I", codigo: "PPP", semestre: 8, icono: "fa-briefcase", color: "#1a73e8", activa: true },
+                { id: "sgsi", nombre: "Sistema de Gestión de la Seguridad de la Información", codigo: "TI09-01", semestre: 9, icono: "fa-lock", color: "#1a73e8", activa: true },
+                { id: "sistemas-distribuidos", nombre: "Sistemas Distribuidos", codigo: "TI09-02", semestre: 9, icono: "fa-share-nodes", color: "#1a73e8", activa: true },
+                { id: "computacion-movil", nombre: "Computación Móvil", codigo: "TI09-03", semestre: 9, icono: "fa-mobile-screen", color: "#1a73e8", activa: true },
+                { id: "gestion-de-sistemas-de-calidad", nombre: "Gestión de Sistemas de Calidad", codigo: "TI09-04", semestre: 9, icono: "fa-award", color: "#1a73e8", activa: true },
+                { id: "formulacion-trabajo-titulacion", nombre: "Formulación y Evaluación del Trabajo de Titulación", codigo: "TI09-05", semestre: 9, icono: "fa-graduation-cap", color: "#1a73e8", activa: true },
+                { id: "practicas-2", nombre: "Prácticas Laborales II", codigo: "PPP", semestre: 9, icono: "fa-user-tie", color: "#1a73e8", activa: true }
         ];
         const idsRespaldo = new Set(MATERIAS_RESPALDO.map(m => m.id));
 
@@ -958,7 +1018,7 @@
         let materiasFirestoreOk = true;
 
         function etiquetaMateria(m) {
-            return m.nombre + (m.activa === false ? ' (inactiva)' : '');
+            return m.nombre + (m.semestre ? ` · ${m.semestre}.º` : '') + (m.activa === false ? ' (inactiva)' : '');
         }
 
         async function cargarConfigMaterias() {
@@ -1484,6 +1544,86 @@
         const matColor = document.getElementById('mat-color');
         const matActiva = document.getElementById('mat-activa');
         const matIdEdicion = document.getElementById('mat-id-edicion');
+        const matSemestre = document.getElementById('mat-semestre');
+        const matCodigo = document.getElementById('mat-codigo');
+        const matPortadaArchivo = document.getElementById('mat-portada-archivo');
+        const matPortadaPreview = document.getElementById('mat-portada-preview');
+        const btnQuitarPortada = document.getElementById('btn-quitar-portada');
+        let portadaNueva = null;      // imagen elegida (data URL) que aún no se guarda
+        let quitarPortada = false;    // true si se pidió quitar la portada actual
+
+        function mostrarPreviewPortada(dataUrl) {
+            if (dataUrl) {
+                matPortadaPreview.innerHTML = `<img src="${dataUrl}" alt="Portada">`;
+                btnQuitarPortada.classList.remove('hidden');
+            } else {
+                matPortadaPreview.innerHTML = '<i class="fas fa-image"></i>';
+                btnQuitarPortada.classList.add('hidden');
+            }
+        }
+
+        async function cargarImagenComoBitmap(file) {
+            try { return await createImageBitmap(file); }
+            catch (e) {
+                return await new Promise((resolve, reject) => {
+                    const url = URL.createObjectURL(file);
+                    const img = new Image();
+                    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+                    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer la imagen.')); };
+                    img.src = url;
+                });
+            }
+        }
+
+        // Recorta al centro en formato 16:9 y comprime a JPEG (~150 KB como máximo) para guardarla en Firestore
+        async function prepararPortada(file) {
+            const origen = await cargarImagenComoBitmap(file);
+            const ancho = origen.width, alto = origen.height;
+            const W = 640, H = 360;
+            const canvas = document.createElement('canvas');
+            canvas.width = W; canvas.height = H;
+            const ctx = canvas.getContext('2d');
+            const escala = Math.max(W / ancho, H / alto);
+            const w = ancho * escala, h = alto * escala;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, W, H);
+            ctx.drawImage(origen, (W - w) / 2, (H - h) / 2, w, h);
+            if (origen.close) origen.close();
+            let calidad = 0.85;
+            let data = canvas.toDataURL('image/jpeg', calidad);
+            while (data.length > 200000 && calidad > 0.4) { calidad -= 0.1; data = canvas.toDataURL('image/jpeg', calidad); }
+            return data;
+        }
+
+        matPortadaArchivo.addEventListener('change', async () => {
+            const file = matPortadaArchivo.files[0];
+            if (!file) return;
+            if (!/^image\//.test(file.type)) {
+                Swal.fire('Atención', 'Seleccione un archivo de imagen (JPG, PNG o WEBP).', 'warning');
+                matPortadaArchivo.value = '';
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                Swal.fire('Atención', 'La imagen supera los 10 MB. Elija una más liviana.', 'warning');
+                matPortadaArchivo.value = '';
+                return;
+            }
+            try {
+                portadaNueva = await prepararPortada(file);
+                quitarPortada = false;
+                mostrarPreviewPortada(portadaNueva);
+            } catch (e) {
+                console.error(e);
+                Swal.fire('Error', 'No se pudo procesar la imagen. Pruebe con otra.', 'error');
+            }
+            matPortadaArchivo.value = '';
+        });
+
+        btnQuitarPortada.onclick = () => {
+            portadaNueva = null;
+            quitarPortada = true;
+            mostrarPreviewPortada(null);
+        };
 
         function actualizarPreviewMateria() {
             const prev = document.getElementById('mat-preview');
@@ -1503,6 +1643,10 @@
             matIcono.value = 'fa-book';
             matColor.value = '#1a73e8';
             matActiva.checked = true;
+            matSemestre.value = '';
+            matCodigo.value = '';
+            portadaNueva = null; quitarPortada = false; matPortadaArchivo.value = '';
+            mostrarPreviewPortada(null);
             document.getElementById('mat-titulo-form').textContent = 'Nueva materia';
             document.getElementById('btn-cancelar-materia').classList.add('hidden');
             actualizarPreviewMateria();
@@ -1533,7 +1677,8 @@
                 const activa = m.activa !== false;
                 const color = /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#1a73e8';
                 return `<tr>
-                    <td><span class="materia-swatch" style="background:${color};"><i class="fas ${escapeHtml(m.icono || 'fa-book')}"></i></span>${escapeHtml(m.nombre)}</td>
+                    <td><span class="materia-swatch" style="background:${color};"><i class="fas ${escapeHtml(m.icono || 'fa-book')}"></i></span>${escapeHtml(m.nombre)}${m.portada_v ? ' <i class="fas fa-image" title="Tiene imagen de portada" style="color:#5f6368; margin-left:4px;"></i>' : ''}</td>
+                    <td>${m.semestre ? m.semestre + '.º' : '—'}</td>
                     <td><code>${escapeHtml(m.id)}</code></td>
                     <td>${activa ? '<span style="color:#188038; font-weight:600;">Activa</span>' : '<span style="color:#b06000; font-weight:600;">Inactiva</span>'}</td>
                     <td style="white-space:nowrap;">
@@ -1557,13 +1702,26 @@
             if (materias.some(m => m.id !== id && m.nombre.trim().toLowerCase() === nombre.toLowerCase())) {
                 return Swal.fire('Atención', 'Ya existe otra materia con ese nombre.', 'warning');
             }
-            const datos = { nombre, icono: matIcono.value, color: matColor.value, activa: matActiva.checked };
+            const datos = {
+                nombre, icono: matIcono.value, color: matColor.value, activa: matActiva.checked,
+                semestre: matSemestre.value ? Number(matSemestre.value) : null,
+                codigo: matCodigo.value.trim()
+            };
             if (!materias.some(m => m.id === id)) datos.creada = Date.now();
 
             const btn = document.getElementById('btn-guardar-materia');
             btn.disabled = true;
             try {
+                const refPortada = doc(db, 'config_materias', id, 'recursos', 'portada');
+                if (portadaNueva) {
+                    datos.portada_v = Date.now();
+                    // primero la imagen y después la versión, para que el simulador nunca lea una versión sin imagen
+                    await setDoc(refPortada, { dataUrl: portadaNueva, v: datos.portada_v });
+                } else if (quitarPortada) {
+                    datos.portada_v = null;
+                }
                 await setDoc(doc(db, 'config_materias', id), datos, { merge: true });
+                if (!portadaNueva && quitarPortada) { try { await deleteDoc(refPortada); } catch (_) {} }
                 await refrescarMaterias();
                 limpiarFormMateria();
                 Swal.fire({ icon: 'success', title: 'Materia guardada', text: `ID: ${id}`, timer: 1800, showConfirmButton: false });
@@ -1574,7 +1732,7 @@
             }
         };
 
-        window.editarMateria = (id) => {
+        window.editarMateria = async (id) => {
             const m = materias.find(x => x.id === id);
             if (!m) return;
             matIdEdicion.value = m.id;
@@ -1584,11 +1742,21 @@
             matIcono.value = icono;
             matColor.value = /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#1a73e8';
             matActiva.checked = m.activa !== false;
+            matSemestre.value = m.semestre ? String(m.semestre) : '';
+            matCodigo.value = m.codigo || '';
+            portadaNueva = null; quitarPortada = false;
+            mostrarPreviewPortada(null);
             document.getElementById('mat-titulo-form').textContent = `Editando: ${m.nombre}`;
             document.getElementById('btn-cancelar-materia').classList.remove('hidden');
             actualizarPreviewMateria();
             matNombre.scrollIntoView({ behavior: 'smooth', block: 'center' });
             matNombre.focus();
+            if (m.portada_v) {   // cargar la portada actual para mostrarla en el formulario
+                try {
+                    const p = await getDoc(doc(db, 'config_materias', m.id, 'recursos', 'portada'));
+                    if (p.exists() && matIdEdicion.value === m.id && !portadaNueva && !quitarPortada) mostrarPreviewPortada(p.data().dataUrl);
+                } catch (e) { console.warn('No se pudo leer la portada actual:', e); }
+            }
         };
 
         window.alternarMateria = async (id) => {

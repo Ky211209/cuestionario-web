@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, addDoc, getCountFromServer, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 function getDeviceId() {
     let id = localStorage.getItem('device_id');
@@ -302,6 +302,7 @@ const USUARIOS_PERMITIDOS = [
 
 let currentMateria = "", currentMode = "", questions = [], currentIndex = 0;
 let selectedAnswers = [];
+let enPantallaResultados = false;   // true mientras se muestran los resultados detallados
 let timerInterval = null;
 let tiempoLimiteSegundos = 0;
 let tiempoRestante = 0;
@@ -435,7 +436,10 @@ onAuthStateChanged(auth, async (user) => {
 
         const welcomeName = document.getElementById('user-welcome-name');
         const welcomeSub = document.getElementById('user-welcome-sub');
-        if (welcomeName) welcomeName.textContent = currentUserName.toUpperCase();
+        if (welcomeName) {
+            const primer = (currentUserName || '').split(' ')[0].split('@')[0];
+            welcomeName.textContent = 'Hola, ' + primer.charAt(0).toUpperCase() + primer.slice(1).toLowerCase();
+        }
         if (welcomeSub) welcomeSub.textContent = `${userEmail} · ${maxDispFinal} dispositivo${maxDispFinal !== 1 ? 's' : ''}`;
 
         if (esAdminUser) {
@@ -460,18 +464,37 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 // 2. CARGAR MATERIAS
-// La lista embebida (CONFIG_MATERIAS) se mantiene como respaldo para evitar
-// errores 404 en GitHub Pages. Las materias creadas desde el Panel Administrativo
+// La lista embebida (CONFIG_MATERIAS) trae la malla curricular (semestre y código) y se
+// mantiene como respaldo para evitar errores 404 en GitHub Pages. Las materias creadas desde el Panel Administrativo
 // se guardan en Firestore (colección "config_materias") y se suman a esta lista
 // automáticamente; no hace falta editar este archivo para agregar materias nuevas.
 const CONFIG_MATERIAS = {
   "materias": [
-    { "id": "comp-forense",   "nombre": "Computación Forense",        "activa": true },
-    { "id": "deontologia",    "nombre": "Deontología",                "activa": true },
-    { "id": "auditoria-ti",   "nombre": "Auditoría de TI",            "activa": true },
-    { "id": "emprendimiento", "nombre": "Emprendimiento e Innovación", "activa": true },
-    { "id": "ia",             "nombre": "Inteligencia Artificial",     "activa": true },
-    { "id": "practicas-1",    "nombre": "Prácticas Laborales 1",      "activa": true }
+  { "id": "gestion-de-base-de-datos", "nombre": "Gestión de Base de Datos", "codigo": "", "semestre": 5, "icono": "fa-database", "activa": true },
+  { "id": "diseno-de-investigacion", "nombre": "Diseño de Investigación", "codigo": "TI06-01", "semestre": 6, "icono": "fa-magnifying-glass", "activa": true },
+  { "id": "mineria-de-datos", "nombre": "Minería de Datos", "codigo": "TI06-02", "semestre": 6, "icono": "fa-gem", "activa": true },
+  { "id": "tecnologias-de-conmutacion-y-enrutamiento", "nombre": "Tecnologías de Conmutación y Enrutamiento", "codigo": "TI06-03", "semestre": 6, "icono": "fa-network-wired", "activa": true },
+  { "id": "desarrollo-de-aplicaciones-web", "nombre": "Desarrollo de Aplicaciones Web", "codigo": "TI06-04", "semestre": 6, "icono": "fa-laptop-code", "activa": true },
+  { "id": "ingenieria-de-software-ii", "nombre": "Ingeniería de Software II", "codigo": "TI06-05", "semestre": 6, "icono": "fa-code-branch", "activa": true },
+  { "id": "liderazgo", "nombre": "Liderazgo", "codigo": "TI06-06", "semestre": 6, "icono": "fa-users", "activa": true },
+  { "id": "gestion-de-proyectos-informaticos", "nombre": "Gestión de Proyectos Informáticos", "codigo": "TI07-01", "semestre": 7, "icono": "fa-diagram-project", "activa": true },
+  { "id": "inteligencia-de-negocios", "nombre": "Inteligencia de Negocios", "codigo": "TI07-02", "semestre": 7, "icono": "fa-chart-line", "activa": true },
+  { "id": "escalabilidad-y-redes", "nombre": "Escalabilidad y Redes", "codigo": "TI07-03", "semestre": 7, "icono": "fa-sitemap", "activa": true },
+  { "id": "seguridad-informatica", "nombre": "Seguridad Informática", "codigo": "TI07-04", "semestre": 7, "icono": "fa-shield-halved", "activa": true },
+  { "id": "administracion-y-organizacion-empresarial", "nombre": "Administración y Organización Empresarial", "codigo": "TI07-05", "semestre": 7, "icono": "fa-building", "activa": true },
+  { "id": "practicas-servicio-comunitario", "nombre": "Prácticas de Servicio Comunitario", "codigo": "", "semestre": 7, "icono": "fa-hand-holding-heart", "activa": true },
+  { "id": "comp-forense", "nombre": "Computación Forense", "codigo": "TI08-01", "semestre": 8, "icono": "fa-microscope", "activa": true },
+  { "id": "ia", "nombre": "Inteligencia Artificial", "codigo": "TI08-02", "semestre": 8, "icono": "fa-robot", "activa": true },
+  { "id": "emprendimiento", "nombre": "Emprendimiento e Innovación", "codigo": "TI08-03", "semestre": 8, "icono": "fa-lightbulb", "activa": true },
+  { "id": "auditoria-ti", "nombre": "Auditoría de TI", "codigo": "TI08-04", "semestre": 8, "icono": "fa-clipboard-check", "activa": true },
+  { "id": "deontologia", "nombre": "Deontología", "codigo": "TI08-05", "semestre": 8, "icono": "fa-scale-balanced", "activa": true },
+  { "id": "practicas-1", "nombre": "Prácticas Laborales I", "codigo": "PPP", "semestre": 8, "icono": "fa-briefcase", "activa": true },
+  { "id": "sgsi", "nombre": "Sistema de Gestión de la Seguridad de la Información", "codigo": "TI09-01", "semestre": 9, "icono": "fa-lock", "activa": true },
+  { "id": "sistemas-distribuidos", "nombre": "Sistemas Distribuidos", "codigo": "TI09-02", "semestre": 9, "icono": "fa-share-nodes", "activa": true },
+  { "id": "computacion-movil", "nombre": "Computación Móvil", "codigo": "TI09-03", "semestre": 9, "icono": "fa-mobile-screen", "activa": true },
+  { "id": "gestion-de-sistemas-de-calidad", "nombre": "Gestión de Sistemas de Calidad", "codigo": "TI09-04", "semestre": 9, "icono": "fa-award", "activa": true },
+  { "id": "formulacion-trabajo-titulacion", "nombre": "Formulación y Evaluación del Trabajo de Titulación", "codigo": "TI09-05", "semestre": 9, "icono": "fa-graduation-cap", "activa": true },
+  { "id": "practicas-2", "nombre": "Prácticas Laborales II", "codigo": "PPP", "semestre": 9, "icono": "fa-user-tie", "activa": true }
   ]
 };
 
@@ -495,6 +518,333 @@ async function obtenerMateriasConfiguradas() {
     return [...lista, ...nuevas];
 }
 
+// ================================================================
+// MENÚ DE MATERIAS EN TARJETAS (agrupadas por semestre)
+// ================================================================
+const NOMBRES_SEMESTRE = { 1: 'Primer', 2: 'Segundo', 3: 'Tercer', 4: 'Cuarto', 5: 'Quinto', 6: 'Sexto', 7: 'Séptimo', 8: 'Octavo', 9: 'Noveno', 10: 'Décimo' };
+const CLAVE_CONTEOS = 'qz_conteos';
+let materiasMenu = [];                 // materias que este usuario puede ver
+const datosTarjeta = {};               // id -> { total, avance, portada }
+const filtroMenu = { semestre: 'todos', texto: '', soloConPreguntas: false };
+let cargaDatosId = 0;
+
+function escHtml(t) {
+    return String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function normalizarTexto(t) {
+    return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+function claseSemestre(s) { return [5, 6, 7, 8, 9].includes(Number(s)) ? `sem-${Number(s)}` : 'sem-0'; }
+function tituloSemestre(s) { return s ? `${NOMBRES_SEMESTRE[s] || s + '.º'} semestre` : 'Otras materias'; }
+// El azul por defecto del panel no cuenta como color elegido: se usa el color del semestre
+function colorPersonalizado(m) {
+    return /^#[0-9a-fA-F]{6}$/.test(m.color || '') && m.color.toLowerCase() !== '#1a73e8' ? m.color : null;
+}
+
+function ordenarMaterias(lista) {
+    const clave = (m) => [m.semestre ? Number(m.semestre) : 99, m.codigo ? 0 : 1, m.codigo || '', m.nombre || ''];
+    return lista.slice().sort((a, b) => {
+        const x = clave(a), y = clave(b);
+        for (let i = 0; i < 4; i++) { if (x[i] < y[i]) return -1; if (x[i] > y[i]) return 1; }
+        return 0;
+    });
+}
+
+function htmlTarjeta(m) {
+    const custom = colorPersonalizado(m);
+    return `<article class="mcard ${claseSemestre(m.semestre)}" data-id="${escHtml(m.id)}" role="button" tabindex="0"${custom ? ` style="--hue:${custom}"` : ''}>
+        <div class="mcard-cover">
+            <i class="fas ${escHtml(m.icono || 'fa-book')} mcard-icono"></i>
+            ${m.semestre ? `<span class="pill pill-sem">${escHtml(m.semestre)}.º</span>` : ''}
+        </div>
+        <div class="mcard-body">
+            <h4>${escHtml(m.nombre)}</h4>
+            <p class="mcard-meta"></p>
+        </div>
+        <div class="mcard-foot">
+            <div class="prog-label"></div>
+            <div class="prog-bar"><i></i></div>
+        </div>
+    </article>`;
+}
+
+// Actualiza los datos variables de una tarjeta (preguntas, avance, portada, estado)
+function pintarTarjeta(card) {
+    const m = materiasMenu.find(x => x.id === card.dataset.id);
+    if (!m) return;
+    const d = datosTarjeta[m.id] || {};
+    const sinPreguntas = d.total === 0;
+    card.classList.toggle('es-proximamente', sinPreguntas);
+    card.setAttribute('aria-disabled', sinPreguntas ? 'true' : 'false');
+    card.setAttribute('aria-label', `${m.nombre}${sinPreguntas ? ' (próximamente)' : ''}`);
+
+    const meta = [];
+    if (m.codigo) meta.push(escHtml(m.codigo));
+    if (typeof d.total === 'number' && d.total > 0) meta.push(`${d.total} pregunta${d.total !== 1 ? 's' : ''}`);
+    card.querySelector('.mcard-meta').innerHTML = meta.join(' · ') || '&nbsp;';
+
+    const cover = card.querySelector('.mcard-cover');
+    let estado = cover.querySelector('.pill-estado');
+    if (sinPreguntas) {
+        if (!estado) { estado = document.createElement('span'); estado.className = 'pill pill-estado'; cover.appendChild(estado); }
+        estado.textContent = 'Próximamente';
+    } else if (estado) { estado.remove(); }
+
+    let img = cover.querySelector('img');
+    if (d.portada) {
+        if (!img) { img = document.createElement('img'); img.alt = ''; cover.insertBefore(img, cover.firstChild); }
+        if (img.getAttribute('src') !== d.portada) img.src = d.portada;
+        cover.classList.add('con-imagen');
+    } else {
+        if (img) img.remove();
+        cover.classList.remove('con-imagen');
+    }
+
+    const label = card.querySelector('.prog-label');
+    const barra = card.querySelector('.prog-bar i');
+    if (sinPreguntas) { label.textContent = 'Sin preguntas todavía'; barra.style.width = '0%'; }
+    else if (typeof d.avance === 'number') { label.textContent = `${d.avance}% completado`; barra.style.width = `${d.avance}%`; }
+    else if (d.total === undefined) { label.textContent = 'Cargando…'; barra.style.width = '0%'; }
+    else { label.textContent = '0% completado'; barra.style.width = '0%'; }
+}
+
+function actualizarEncabezadosSeccion() {
+    document.querySelectorAll('#menu-secciones .sem-section').forEach(sec => {
+        const ids = [...sec.querySelectorAll('.mcard')].map(c => c.dataset.id);
+        const conPreguntas = ids.filter(id => (datosTarjeta[id] || {}).total > 0).length;
+        const conocidos = ids.every(id => typeof (datosTarjeta[id] || {}).total === 'number');
+        sec.querySelector('.sem-head span').textContent =
+            `${ids.length} materia${ids.length !== 1 ? 's' : ''}` + (conocidos ? ` · ${conPreguntas} con preguntas` : '');
+    });
+}
+
+function aplicarFiltrosMenu() {
+    const q = normalizarTexto(filtroMenu.texto).trim();
+    let visibles = 0;
+    document.querySelectorAll('#menu-secciones .sem-section').forEach(sec => {
+        let visiblesSeccion = 0;
+        sec.querySelectorAll('.mcard').forEach(card => {
+            const m = materiasMenu.find(x => x.id === card.dataset.id);
+            const d = datosTarjeta[m.id] || {};
+            let ok = true;
+            if (filtroMenu.semestre !== 'todos' && String(m.semestre || 0) !== String(filtroMenu.semestre)) ok = false;
+            if (ok && q && !normalizarTexto(`${m.nombre} ${m.codigo || ''}`).includes(q)) ok = false;
+            if (ok && filtroMenu.soloConPreguntas && d.total === 0) ok = false;
+            card.classList.toggle('hidden', !ok);
+            if (ok) visiblesSeccion++;
+        });
+        sec.classList.toggle('hidden', visiblesSeccion === 0);
+        visibles += visiblesSeccion;
+    });
+    document.querySelectorAll('#menu-chips .chip').forEach(c => c.classList.toggle('active', c.dataset.sem === String(filtroMenu.semestre)));
+    const vacio = document.getElementById('menu-vacio');
+    if (materiasMenu.length === 0) {
+        vacio.textContent = 'No tiene materias asignadas. Contacte al administrador.';
+        vacio.classList.remove('hidden');
+    } else if (visibles === 0) {
+        vacio.textContent = 'No hay materias que coincidan con la búsqueda.';
+        vacio.classList.remove('hidden');
+    } else {
+        vacio.classList.add('hidden');
+    }
+}
+
+function actualizarTarjetas() {
+    document.querySelectorAll('#menu-secciones .mcard').forEach(pintarTarjeta);
+    actualizarEncabezadosSeccion();
+    aplicarFiltrosMenu();
+}
+
+function renderMenuMaterias() {
+    const cont = document.getElementById('menu-secciones');
+    const chips = document.getElementById('menu-chips');
+    const grupos = new Map();
+    materiasMenu.forEach(m => {
+        const k = m.semestre ? Number(m.semestre) : 0;
+        if (!grupos.has(k)) grupos.set(k, []);
+        grupos.get(k).push(m);
+    });
+    const claves = [...grupos.keys()].sort((a, b) => (a || 99) - (b || 99));
+    cont.innerHTML = claves.map(k => `<section class="sem-section ${claseSemestre(k)}" data-sem="${k}">
+            <div class="sem-head"><h3>${tituloSemestre(k)}</h3><span></span></div>
+            <div class="cards-grid">${grupos.get(k).map(htmlTarjeta).join('')}</div>
+        </section>`).join('');
+    chips.innerHTML = '<button type="button" class="chip" data-sem="todos">Todos</button>' +
+        claves.map(k => `<button type="button" class="chip" data-sem="${k}">${k ? k + '.º' : 'Otras'}</button>`).join('');
+    if (filtroMenu.semestre !== 'todos' && !claves.map(String).includes(String(filtroMenu.semestre))) filtroMenu.semestre = 'todos';
+    actualizarTarjetas();
+}
+
+// ── Datos de las tarjetas: preguntas, avance y portadas ──
+function leerConteosCache() {
+    try {
+        const c = JSON.parse(sessionStorage.getItem(CLAVE_CONTEOS) || 'null');
+        if (c && Date.now() - c.ts < 10 * 60 * 1000) return c.datos || {};
+    } catch (e) { /* sin caché */ }
+    return {};
+}
+
+// Muestra al instante las portadas ya guardadas en este dispositivo
+function aplicarPortadasCache() {
+    materiasMenu.forEach(m => {
+        datosTarjeta[m.id] = datosTarjeta[m.id] || {};
+        if (!m.portada_v) { datosTarjeta[m.id].portada = null; return; }
+        try {
+            const c = JSON.parse(localStorage.getItem(`qz_portada_${m.id}`) || 'null');
+            if (c && c.v === m.portada_v && c.d) datosTarjeta[m.id].portada = c.d;
+        } catch (e) { /* sin caché */ }
+    });
+}
+
+async function cargarPortadas(miCarga) {
+    await Promise.all(materiasMenu.filter(m => m.portada_v && !datosTarjeta[m.id].portada).map(async (m) => {
+        try {
+            const p = await getDoc(doc(db, 'config_materias', m.id, 'recursos', 'portada'));
+            if (p.exists() && p.data().dataUrl) {
+                datosTarjeta[m.id].portada = p.data().dataUrl;
+                try { localStorage.setItem(`qz_portada_${m.id}`, JSON.stringify({ v: m.portada_v, d: p.data().dataUrl })); } catch (e) { /* sin espacio */ }
+            }
+        } catch (e) { console.warn('No se pudo leer la portada de', m.id, e); }
+    }));
+    if (miCarga === cargaDatosId) actualizarTarjetas();
+}
+
+async function cargarAvances(ids, miCarga) {
+    await Promise.all(ids.filter(id => datosTarjeta[id].total > 0).map(async (id) => {
+        try {
+            const p = await getDoc(doc(db, 'progreso_estudio', `${currentUserEmail}_${id}`));
+            const indice = p.exists() ? (p.data().indice || 0) : 0;
+            datosTarjeta[id].avance = Math.max(0, Math.min(100, Math.round((indice / datosTarjeta[id].total) * 100)));
+        } catch (e) { /* sin avance */ }
+    }));
+    if (miCarga === cargaDatosId) actualizarTarjetas();
+}
+
+async function cargarDatosTarjetas() {
+    const miCarga = ++cargaDatosId;
+    const ids = materiasMenu.map(m => m.id);
+    const conteos = leerConteosCache();
+    aplicarPortadasCache();
+    ids.forEach(id => { datosTarjeta[id] = datosTarjeta[id] || {}; if (typeof conteos[id] === 'number') datosTarjeta[id].total = conteos[id]; });
+    actualizarTarjetas();
+
+    const faltan = ids.filter(id => typeof conteos[id] !== 'number');
+    await Promise.all(faltan.map(async (id) => {
+        try {
+            const snap = await getCountFromServer(collection(db, `bancos_preguntas/${id}/preguntas`));
+            conteos[id] = snap.data().count;
+        } catch (e) { conteos[id] = null; }
+    }));
+    if (miCarga !== cargaDatosId) return;
+    if (faltan.length) {
+        try {
+            const numericos = Object.fromEntries(Object.entries(conteos).filter(([, v]) => typeof v === 'number'));
+            sessionStorage.setItem(CLAVE_CONTEOS, JSON.stringify({ ts: Date.now(), datos: numericos }));
+        } catch (e) { /* sin caché */ }
+    }
+    ids.forEach(id => { datosTarjeta[id].total = typeof conteos[id] === 'number' ? conteos[id] : null; });
+    actualizarTarjetas();
+    await Promise.all([cargarAvances(ids, miCarga), cargarPortadas(miCarga)]);
+}
+
+// ── Panel de inicio (Examen / Estudio) ──
+function panelMateriaAbierto() {
+    return !document.getElementById('launch-panel').classList.contains('hidden');
+}
+
+function establecerModoPanel(modo) {
+    const modeSelect = document.getElementById('mode-select');
+    modeSelect.value = modo;
+    if (modeSelect.onchange) modeSelect.onchange();
+    document.querySelectorAll('#launch-panel .mode-card').forEach(b => b.classList.toggle('active', b.dataset.mode === modo));
+    document.getElementById('btn-start').textContent = modo === 'study' ? 'Iniciar estudio' : 'Iniciar examen';
+}
+
+function abrirPanelMateria(id) {
+    const m = materiasMenu.find(x => x.id === id);
+    if (!m) return;
+    const d = datosTarjeta[id] || {};
+    document.getElementById('subject-select').value = id;
+    document.getElementById('tiempo-select').value = '20';
+    document.getElementById('cantidad-select').value = '20';
+    establecerModoPanel('exam');
+
+    const tarjeta = document.getElementById('launch-card');
+    tarjeta.className = `launch-card ${claseSemestre(m.semestre)}`;
+    const custom = colorPersonalizado(m);
+    if (custom) tarjeta.style.setProperty('--hue', custom); else tarjeta.style.removeProperty('--hue');
+    const cover = document.getElementById('launch-cover');
+    const img = document.getElementById('launch-img');
+    if (d.portada) { img.src = d.portada; img.classList.remove('hidden'); cover.classList.add('con-imagen'); }
+    else { img.removeAttribute('src'); img.classList.add('hidden'); cover.classList.remove('con-imagen'); }
+    document.getElementById('launch-icon').className = `fas ${m.icono || 'fa-book'} launch-icon`;
+    document.getElementById('launch-title').textContent = m.nombre;
+    document.getElementById('launch-meta').textContent =
+        [m.codigo, m.semestre ? tituloSemestre(m.semestre) : ''].filter(Boolean).join(' · ') +
+        (typeof d.total === 'number' && d.total > 0 ? ` · ${d.total} preguntas` : '');
+
+    document.getElementById('launch-panel').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    document.getElementById('btn-start').focus();
+}
+
+function cerrarPanelMateria() {
+    document.getElementById('launch-panel').classList.add('hidden');
+    document.body.style.overflow = '';
+    document.getElementById('subject-select').value = '';
+}
+
+function accionTarjeta(card) {
+    if (card.classList.contains('es-proximamente')) {
+        Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'Próximamente',
+                    text: 'Esta materia aún no tiene preguntas cargadas.', timer: 2500, showConfirmButton: false });
+        return;
+    }
+    abrirPanelMateria(card.dataset.id);
+}
+
+// Conexión de eventos del menú (una sola vez)
+(function conectarMenu() {
+    const modeSelect = document.getElementById('mode-select');
+    modeSelect.onchange = () => {
+        const opcionSinLimite = document.getElementById('opcion-sin-limite');
+        const cantidadContainer = document.getElementById('cantidad-container');
+        const tiempoSelect = document.getElementById('tiempo-select');
+        if (modeSelect.value === 'study') {
+            opcionSinLimite.style.display = '';
+            cantidadContainer.style.display = 'block';
+        } else {
+            opcionSinLimite.style.display = 'none';
+            cantidadContainer.style.display = 'none';
+            if (tiempoSelect.value === '0') tiempoSelect.value = '20';
+        }
+    };
+
+    const secciones = document.getElementById('menu-secciones');
+    secciones.addEventListener('click', (e) => { const card = e.target.closest('.mcard'); if (card) accionTarjeta(card); });
+    secciones.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('mcard')) {
+            e.preventDefault();
+            accionTarjeta(e.target);
+        }
+    });
+    document.getElementById('menu-chips').addEventListener('click', (e) => {
+        const b = e.target.closest('.chip');
+        if (!b) return;
+        filtroMenu.semestre = b.dataset.sem;
+        aplicarFiltrosMenu();
+    });
+    document.getElementById('menu-buscar').addEventListener('input', (e) => { filtroMenu.texto = e.target.value; aplicarFiltrosMenu(); });
+    document.getElementById('menu-solo-preguntas').addEventListener('change', (e) => { filtroMenu.soloConPreguntas = e.target.checked; aplicarFiltrosMenu(); });
+
+    document.querySelectorAll('#launch-panel .mode-card').forEach(b => b.addEventListener('click', () => establecerModoPanel(b.dataset.mode)));
+    document.getElementById('launch-close').addEventListener('click', cerrarPanelMateria);
+    document.getElementById('launch-panel').addEventListener('click', (e) => { if (e.target.id === 'launch-panel') cerrarPanelMateria(); });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && panelMateriaAbierto() && !Swal.isVisible()) cerrarPanelMateria();
+    });
+})();
+
 async function cargarMaterias() {
     try {
         const todasLasMaterias = await obtenerMateriasConfiguradas();
@@ -516,57 +866,28 @@ async function cargarMaterias() {
             }
         }
 
-        const select = document.getElementById('subject-select');
-        const btnStart = document.getElementById('btn-start');
+        materiasMenu = ordenarMaterias(materiasVisibles);
 
+        // Select oculto: el resto del script (inicio del examen) sigue leyendo la materia de aquí
+        const select = document.getElementById('subject-select');
+        const previo = select.value;
         select.innerHTML = '<option value="">-- Selecciona Materia --</option>';
-        materiasVisibles.forEach(m => {
+        materiasMenu.forEach(m => {
             const opt = document.createElement('option');
             opt.value = m.id;
             opt.textContent = m.nombre;
             select.appendChild(opt);
         });
+        if (previo && materiasMenu.some(m => m.id === previo)) select.value = previo;
 
-        if (materiasVisibles.length === 0) {
-            select.innerHTML = '<option value="">Sin materias asignadas</option>';
-            btnStart.disabled = true;
-            btnStart.textContent = "Sin acceso a materias";
-            return;
-        }
-
-        select.onchange = () => {
-            if (select.value === "") {
-                btnStart.disabled = true;
-                btnStart.textContent = "Selecciona una materia";
-                btnStart.style.opacity = "0.5";
-            } else {
-                btnStart.disabled = false;
-                btnStart.textContent = "Iniciar";
-                btnStart.style.opacity = "1";
-            }
-        };
-
-        const modeSelect = document.getElementById('mode-select');
-        const opcionSinLimite = document.getElementById('opcion-sin-limite');
-        const cantidadContainer = document.getElementById('cantidad-container');
-        const tiempoSelect = document.getElementById('tiempo-select');
-
-        modeSelect.onchange = () => {
-            if (modeSelect.value === 'study') {
-                opcionSinLimite.style.display = '';
-                cantidadContainer.style.display = 'block';
-            } else {
-                opcionSinLimite.style.display = 'none';
-                cantidadContainer.style.display = 'none';
-                if (tiempoSelect.value === '0') tiempoSelect.value = '20';
-            }
-        };
+        renderMenuMaterias();
+        cargarDatosTarjetas();   // en segundo plano: preguntas, avance y portadas
 
     } catch (error) {
         console.error('Error cargando materias:', error);
         Swal.fire({
             icon: 'error', title: 'Error',
-            html: `<p>No se pudo cargar la lista de materias.</p><p style="font-size:0.85rem;color:#999;margin-top:8px;">Error: ${error.message}</p>`,
+            html: `<p>No se pudo cargar la lista de materias.</p><p style="font-size:0.85rem;color:#999;margin-top:8px;">Error: ${escHtml(error.message)}</p>`,
             confirmButtonColor: '#1a73e8'
         });
     }
@@ -575,6 +896,7 @@ async function cargarMaterias() {
 // 3. INICIAR EXAMEN
 document.getElementById('btn-start').onclick = async () => {
     currentMateria = document.getElementById('subject-select').value;
+    if (!currentMateria) return;
     currentMode = document.getElementById('mode-select').value;
     const tiempoMinutos = parseInt(document.getElementById('tiempo-select').value) || 0;
     tiempoLimiteSegundos = tiempoMinutos * 60;
@@ -609,9 +931,12 @@ document.getElementById('btn-start').onclick = async () => {
                 const result = await Swal.fire({
                     title: 'Avance Detectado',
                     html: `Tienes <strong>${savedIndex} pregunta${savedIndex!==1?'s':''}</strong> completada${savedIndex!==1?'s':''} en esta materia.<br><small style="color:#888">Sincronizado entre todos tus dispositivos</small>`,
-                    icon: 'question', showCancelButton: true,
-                    confirmButtonText: 'Retomar avance', cancelButtonText: 'Empezar de cero'
+                    icon: 'question', showCancelButton: true, showDenyButton: true,
+                    confirmButtonText: 'Retomar avance', cancelButtonText: 'Empezar de cero',
+                    denyButtonText: 'Volver al menú', denyButtonColor: '#5f6368',
+                    allowOutsideClick: false, allowEscapeKey: false
                 });
+                if (result.isDenied) return;   // vuelve al menú: no se inicia nada ni se toca el avance guardado
                 currentIndex = result.isConfirmed ? savedIndex : 0;
                 if (!result.isConfirmed) {
                     try { await setDoc(doc(db, "progreso_estudio", `${currentUserEmail}_${currentMateria}`), { indice: 0, actualizado: serverTimestamp() }); } catch(e) {}
@@ -626,7 +951,8 @@ document.getElementById('btn-start').onclick = async () => {
 
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('quiz-screen').classList.remove('hidden');
-        document.getElementById('btn-header-return').classList.add('hidden');
+        enPantallaResultados = false;
+        document.getElementById('btn-header-return').classList.remove('hidden');   // siempre visible arriba mientras se está en una materia
 
         renderQuestion();
 
@@ -774,18 +1100,14 @@ function renderQuestion() {
     const menuButton = document.createElement('button');
     menuButton.className = 'btn-back-menu';
     menuButton.innerHTML = '<i class="fas fa-home"></i> Volver al Menú';
-    menuButton.onclick = () => {
-        Swal.fire({
-            title: '¿Volver al menú?',
-            text: currentMode === "study" ? 'Tu progreso se guardará automáticamente.' : 'Perderás el progreso de este examen.',
-            icon: 'warning', showCancelButton: true,
-            confirmButtonColor: '#1a73e8', confirmButtonText: 'Sí, volver'
-        }).then((res) => { if (res.isConfirmed) { stopTimer(); volverAlMenu(); } });
-    };
+    menuButton.onclick = pedirVolverAlMenu;
     optionsContainer.appendChild(menuButton);
 
     if (!question.opciones || !Array.isArray(question.opciones)) {
-        optionsContainer.innerHTML += '<p style="color: red;">Error: Esta pregunta no tiene opciones válidas.</p>';
+        const errorOpciones = document.createElement('p');
+        errorOpciones.style.color = 'red';
+        errorOpciones.textContent = 'Error: Esta pregunta no tiene opciones válidas.';
+        optionsContainer.appendChild(errorOpciones);
         return;
     }
 
@@ -1057,7 +1379,9 @@ function finalizarExamen() {
 // 7. RESULTADOS DETALLADOS
 function mostrarResultadosDetallados(correctas) {
     const container = document.getElementById('quiz-screen');
+    enPantallaResultados = true;
     container.innerHTML = `
+        <div style="text-align:left;"><button onclick="volverAlMenu()" class="btn-back-menu"><i class="fas fa-home"></i> Volver al Menú</button></div>
         <h2 style="color:#1a73e8;margin-bottom:20px;">Resultados Detallados</h2>
         <div style="text-align:center;margin-bottom:30px;">
             <div style="font-size:3rem;color:${correctas >= questions.length * 0.7 ? '#34a853' : '#ea4335'};">
@@ -1171,12 +1495,7 @@ document.getElementById('btn-logout').onclick = () => {
     });
 };
 
-document.getElementById('btn-header-return').onclick = () => {
-    Swal.fire({
-        title: '¿Volver al menú?', text: 'Se guardará tu progreso si estás en modo estudio.',
-        icon: 'warning', showCancelButton: true, confirmButtonColor: '#1a73e8'
-    }).then((res) => { if (res.isConfirmed) { stopTimer(); volverAlMenu(); } });
-};
+document.getElementById('btn-header-return').onclick = pedirVolverAlMenu;
 
 // ================================================================
 // VOLVER AL MENÚ SIN RECARGAR LA PÁGINA
@@ -1208,19 +1527,28 @@ function hayQuizActivo() {
     return !document.getElementById('quiz-screen').classList.contains('hidden');
 }
 
-// Recarga la lista de materias conservando la que estaba elegida (si sigue disponible)
-async function refrescarListaMaterias() {
-    const select = document.getElementById('subject-select');
-    const previo = select ? select.value : '';
+// Recarga la lista de materias y los datos de las tarjetas (forzar = ignorar la caché de conteos)
+async function refrescarListaMaterias(forzar = false) {
+    if (forzar) { try { sessionStorage.removeItem(CLAVE_CONTEOS); } catch (e) { /* sin caché */ } }
     await cargarMaterias();
-    if (previo && [...select.options].some(o => o.value === previo)) {
-        select.value = previo;
-        if (select.onchange) select.onchange();
-    }
 }
+
+// Pide confirmación (si hay avance que perder) y vuelve al menú. La usan el botón rojo de cada
+// pregunta y el botón "Volver al Menú" del encabezado, que queda siempre visible.
+function pedirVolverAlMenu() {
+    if (enPantallaResultados) { volverAlMenu(); return; }   // ya terminó: no hay nada que perder
+    Swal.fire({
+        title: '¿Volver al menú?',
+        text: currentMode === "study" ? 'Tu progreso se guardará automáticamente.' : 'Perderás el progreso de este examen.',
+        icon: 'warning', showCancelButton: true,
+        confirmButtonColor: '#1a73e8', confirmButtonText: 'Sí, volver', cancelButtonText: 'Cancelar'
+    }).then((res) => { if (res.isConfirmed) { stopTimer(); volverAlMenu(); } });
+}
+window.pedirVolverAlMenu = pedirVolverAlMenu;
 
 function volverAlMenu() {
     stopTimer();
+    enPantallaResultados = false;
     if (hayQuizActivo()) notificarExamenTerminado();
 
     // Limpiar el intento en curso
@@ -1238,16 +1566,9 @@ function volverAlMenu() {
     document.getElementById('update-banner').classList.add('hidden');
     window.scrollTo(0, 0);
 
-    // Materia sin seleccionar (para elegir otra) y lista de materias al día
-    cargarMaterias().finally(() => {
-        const select = document.getElementById('subject-select');
-        const btnStart = document.getElementById('btn-start');
-        if (select && btnStart && select.options.length > 1 && select.value === '') {
-            btnStart.disabled = true;
-            btnStart.textContent = 'Selecciona una materia';
-            btnStart.style.opacity = '0.5';
-        }
-    });
+    // Tarjetas al día (el avance del modo Estudio acaba de cambiar) y sin panel abierto
+    cerrarPanelMateria();
+    cargarMaterias();
 
     // Si había una versión nueva esperando, se aplica ahora que no hay examen en curso
     if (actualizacionPendiente) programarActualizacion();
@@ -1323,10 +1644,9 @@ async function revisionAutomatica() {
             programarActualizacion();
         }
     } else if (estado === 'igual' && !hayQuizActivo()) {
-        // En el menú: mantener la lista de materias al día (sin molestar si el selector está en uso)
-        const select = document.getElementById('subject-select');
+        // En el menú: mantener la lista de materias al día (sin molestar si el panel de inicio está abierto)
         const enMenu = !document.getElementById('setup-screen').classList.contains('hidden');
-        if (enMenu && select && document.activeElement !== select) refrescarListaMaterias();
+        if (enMenu && !panelMateriaAbierto()) refrescarListaMaterias();
     }
 }
 
@@ -1351,7 +1671,7 @@ async function accionBotonActualizar() {
         if (r.isConfirmed) { stopTimer(); await aplicarActualizacion(); }
         return;
     }
-    if (!hayQuizActivo()) await refrescarListaMaterias();
+    if (!hayQuizActivo()) await refrescarListaMaterias(true);
     Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Ya tiene la versión más reciente', timer: 2500, showConfirmButton: false });
 }
 
