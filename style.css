@@ -808,23 +808,48 @@ body.auth-mode header .logo i {
     max-width: 380px;
     background: #fff;
     border-radius: 20px;
-    padding: 40px 32px 32px;
+    padding: 44px 32px 32px;
     text-align: center;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
     animation: panelIn 0.25s ease;
+    position: relative;
+    overflow: hidden;
+}
+.auth-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 6px;
+    background: linear-gradient(90deg, #1a73e8, #3a63e0, #7b4fd6);
 }
 .auth-logo {
-    width: 56px;
-    height: 56px;
+    position: relative;
+    width: 68px;
+    height: 68px;
     margin: 0 auto 16px;
-    border-radius: 16px;
+    border-radius: 50%;
     background: linear-gradient(135deg, #1a73e8, #3a63e0);
     color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.6rem;
+    font-size: 1.8rem;
     box-shadow: 0 8px 20px rgba(26, 115, 232, 0.35);
+}
+.auth-badge {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #0f9d8a;
+    color: #fff;
+    border: 3px solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.62rem;
 }
 .auth-card h2 {
     font-family: var(--font-display, 'Segoe UI');
