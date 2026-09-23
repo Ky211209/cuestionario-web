@@ -442,6 +442,7 @@ onAuthStateChanged(auth, async (user) => {
             welcomeName.textContent = 'Hola, ' + primer.charAt(0).toUpperCase() + primer.slice(1).toLowerCase();
         }
         if (welcomeSub) welcomeSub.textContent = `${userEmail} · ${maxDispFinal} dispositivo${maxDispFinal !== 1 ? 's' : ''}`;
+        actualizarAvatarUsuario(user.photoURL, currentUserName || userEmail);
 
         if (esAdminUser) {
             adminLinkContainer.classList.remove('hidden');
@@ -1540,6 +1541,32 @@ async function cargarFondoAuth() {
 cargarFondoAuth();
 window.cargarFondoAuth = cargarFondoAuth;
 
+// Foto de perfil de Google en el saludo del menú, con iniciales de respaldo si no hay foto o falla la carga
+function iniciales(texto) {
+    const partes = String(texto || '').trim().split(/\s+/).filter(Boolean);
+    if (partes.length === 0) return '?';
+    const a = partes[0][0] || '';
+    const b = partes.length > 1 ? (partes[1][0] || '') : '';
+    return (a + b).toUpperCase() || '?';
+}
+function actualizarAvatarUsuario(photoURL, nombreParaIniciales) {
+    const img = document.getElementById('user-avatar');
+    const fallback = document.getElementById('user-avatar-fallback');
+    if (!img || !fallback) return;
+    fallback.innerHTML = `<span>${escHtml(iniciales(nombreParaIniciales))}</span>`;
+    if (photoURL) {
+        img.onerror = () => { img.classList.add('hidden'); fallback.classList.remove('hidden'); };
+        img.onload = () => { img.classList.remove('hidden'); fallback.classList.add('hidden'); };
+        img.src = photoURL;
+        img.alt = nombreParaIniciales || '';
+    } else {
+        img.removeAttribute('src');
+        img.classList.add('hidden');
+        fallback.classList.remove('hidden');
+    }
+}
+
+window.actualizarAvatarUsuario = actualizarAvatarUsuario;
 function ocultarPantallaCarga() {
     const carga = document.getElementById('loading-screen');
     if (carga) carga.classList.add('hidden');

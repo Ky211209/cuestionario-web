@@ -394,6 +394,39 @@ header {
     margin-bottom: 40px;
 }
 
+.hero-who {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.hero-avatar-wrap {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+}
+.hero-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #fff;
+    box-shadow:
+        0 6px 16px rgba(20, 35, 59, 0.22),
+        inset 0 2px 3px rgba(255, 255, 255, 0.5),
+        inset 0 -3px 6px rgba(0, 0, 40, 0.22);
+}
+.hero-avatar-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1a73e8, #3a63e0);
+    color: #fff;
+    font-size: 1.3rem;
+}
+
 .menu-hero {
     display: flex;
     align-items: flex-end;
@@ -773,7 +806,9 @@ header {
     background-image: linear-gradient(135deg, #142845 0%, #1a3a63 45%, #1a73e8 100%);
     background-size: cover;
     background-position: center;
+    display: none;   /* solo se muestra en la pantalla de acceso (ver body.auth-mode) */
 }
+body.auth-mode #auth-bg { display: block; }
 #auth-bg::after {
     content: '';
     position: absolute;
@@ -834,7 +869,11 @@ body.auth-mode header .logo i {
     align-items: center;
     justify-content: center;
     font-size: 1.8rem;
-    box-shadow: 0 8px 20px rgba(26, 115, 232, 0.35);
+    box-shadow:
+        0 10px 22px rgba(26, 115, 232, 0.38),
+        inset 0 2px 3px rgba(255, 255, 255, 0.45),
+        inset 0 -3px 6px rgba(0, 0, 40, 0.28);
+    border: 3px solid #fff;
 }
 .auth-badge {
     position: absolute;
