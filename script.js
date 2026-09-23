@@ -431,6 +431,7 @@ onAuthStateChanged(auth, async (user) => {
         ocultarPantallaCarga();
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('setup-screen').classList.remove('hidden');
+        document.body.classList.remove('auth-mode');
         document.getElementById('user-display').classList.remove('hidden');
         document.getElementById('user-info').innerText = currentUserName.split(' ')[0].toUpperCase();
 
@@ -455,6 +456,7 @@ onAuthStateChanged(auth, async (user) => {
         ocultarPantallaCarga();
         document.getElementById('auth-screen').classList.remove('hidden');
         document.getElementById('setup-screen').classList.add('hidden');
+        document.body.classList.add('auth-mode');
         document.getElementById('user-display').classList.add('hidden');
         if (adminLinkContainer) {
             adminLinkContainer.classList.add('hidden');
@@ -1504,6 +1506,40 @@ document.getElementById('btn-header-return').onclick = pedirVolverAlMenu;
 // Estructura original de la pantalla del quiz (la pantalla de resultados la reemplaza)
 const QUIZ_SCREEN_HTML_ORIGINAL = document.getElementById('quiz-screen').innerHTML;
 
+// ================================================================
+// FONDO DE LA PANTALLA DE ACCESO (editable por el administrador)
+// Lectura pública en Firestore (config_app/apariencia): se necesita antes de iniciar sesión.
+// ================================================================
+const CLAVE_FONDO_AUTH = 'qz_fondo_auth';
+
+function aplicarFondoAuth(dataUrl) {
+    const bg = document.getElementById('auth-bg');
+    if (bg && dataUrl) bg.style.backgroundImage = `url("${dataUrl}")`;
+}
+
+async function cargarFondoAuth() {
+    let cache = null;
+    try { cache = JSON.parse(localStorage.getItem(CLAVE_FONDO_AUTH) || 'null'); } catch (e) { /* sin caché */ }
+    if (cache && cache.d) aplicarFondoAuth(cache.d);   // se ve al instante mientras se confirma la versión
+
+    try {
+        const cfg = await getDoc(doc(db, 'config_app', 'apariencia'));
+        const v = cfg.exists() ? cfg.data().fondo_v : null;
+        if (!v) {   // sin imagen personalizada: queda el fondo por defecto del CSS
+            if (cache) { try { localStorage.removeItem(CLAVE_FONDO_AUTH); } catch (e) { /* nada que hacer */ } }
+            return;
+        }
+        if (cache && cache.v === v) return;   // ya está aplicada
+        const r = await getDoc(doc(db, 'config_app', 'apariencia', 'recursos', 'fondo'));
+        if (r.exists() && r.data().dataUrl) {
+            aplicarFondoAuth(r.data().dataUrl);
+            try { localStorage.setItem(CLAVE_FONDO_AUTH, JSON.stringify({ v, d: r.data().dataUrl })); } catch (e) { /* sin espacio */ }
+        }
+    } catch (e) { console.warn('No se pudo cargar el fondo de la pantalla de acceso:', e); }
+}
+cargarFondoAuth();
+window.cargarFondoAuth = cargarFondoAuth;
+
 function ocultarPantallaCarga() {
     const carga = document.getElementById('loading-screen');
     if (carga) carga.classList.add('hidden');
@@ -1513,7 +1549,7 @@ setTimeout(() => {
     const carga = document.getElementById('loading-screen');
     if (carga && !carga.classList.contains('hidden')) {
         carga.classList.add('hidden');
-        if (!currentUserEmail) document.getElementById('auth-screen').classList.remove('hidden');
+        if (!currentUserEmail) { document.getElementById('auth-screen').classList.remove('hidden'); document.body.classList.add('auth-mode'); }
     }
 }, 8000);
 
@@ -1647,6 +1683,7 @@ async function revisionAutomatica() {
         // En el menú: mantener la lista de materias al día (sin molestar si el panel de inicio está abierto)
         const enMenu = !document.getElementById('setup-screen').classList.contains('hidden');
         if (enMenu && !panelMateriaAbierto()) refrescarListaMaterias();
+        if (!currentUserEmail) cargarFondoAuth();   // pantalla de acceso: por si el administrador cambió la imagen
     }
 }
 

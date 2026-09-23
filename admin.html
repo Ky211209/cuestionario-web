@@ -464,6 +464,28 @@
             font-weight: 700;
         }
 
+        /* Vista previa del fondo de acceso (pestaña Apariencia) */
+        .fondo-preview {
+            width: 100%;
+            max-width: 480px;
+            aspect-ratio: 16 / 9;
+            border-radius: 10px;
+            border: 1px dashed #c5cbd6;
+            background: #f1f3f6;
+            color: #9aa3b2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 1.8rem;
+            text-align: center;
+            overflow: hidden;
+            position: relative;
+        }
+        .fondo-preview span { font-size: 0.78rem; padding: 0 16px; }
+        .fondo-preview img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
         /* Vista previa de la portada (pestaña Materias) */
         .portada-preview {
             width: 160px;
@@ -544,6 +566,9 @@
             </button>
             <button onclick="changeTab('tab-materias')" id="btn-tab-materias" class="tab-btn">
                 <i class="fas fa-book-open"></i> Materias
+            </button>
+            <button onclick="changeTab('tab-apariencia')" id="btn-tab-apariencia" class="tab-btn">
+                <i class="fas fa-image"></i> Apariencia
             </button>
             <button onclick="changeTab('tab-excel')" id="btn-tab-excel" class="tab-btn">
                 <i class="fas fa-file-excel"></i> Cargar Excel
@@ -700,6 +725,28 @@
             <div id="materias-eliminadas" class="hidden" style="margin-top:20px; background:#f8f9fa; border-radius:8px; padding:12px 14px;">
                 <p style="font-size:0.82rem; font-weight:700; color:#5f6368; margin-bottom:8px;">Materias de la malla eliminadas</p>
                 <div id="lista-eliminadas"></div>
+            </div>
+        </div>
+
+        <!-- ================================================================
+             TAB: APARIENCIA
+             ================================================================ -->
+        <div id="tab-apariencia" class="hidden">
+            <h3>Apariencia de la pantalla de acceso</h3>
+            <p style="font-size: 0.85em; color: #666; margin-bottom: 16px;">
+                Esta imagen se muestra de fondo, detrás de la tarjeta "Continuar con Google", antes de iniciar sesión.
+                Se aplica sola para todos los usuarios en unos minutos; no hace falta que nadie recargue la página a mano.
+            </p>
+
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; max-width: 520px;">
+                <label style="font-size:0.82rem; font-weight:700; color:#5f6368; display:block; margin-bottom:8px;">Imagen de fondo</label>
+                <div id="fondo-preview" class="fondo-preview"><i class="fas fa-image"></i><span>Sin imagen personalizada — se usa el fondo azul por defecto</span></div>
+                <div style="margin-top:12px;">
+                    <input type="file" id="fondo-archivo" accept="image/*" style="font-size:0.85rem; max-width:100%;">
+                    <button type="button" id="btn-quitar-fondo" class="btn-secondary hidden" style="margin-top:6px;"><i class="fas fa-trash-can"></i> Quitar imagen (usar el fondo por defecto)</button>
+                    <p style="font-size:0.75rem; color:#888; margin-top:8px;">Se recorta automáticamente en formato horizontal y se comprime. Use una imagen horizontal y de buen contraste, porque la tarjeta de acceso queda encima con un velo oscuro.</p>
+                </div>
+                <button id="btn-guardar-fondo" class="btn-primary" style="margin-top:14px;">Guardar imagen de fondo</button>
             </div>
         </div>
 
@@ -1589,11 +1636,10 @@
             }
         }
 
-        // Recorta al centro en formato 16:9 y comprime a JPEG (~150 KB como máximo) para guardarla en Firestore
-        async function prepararPortada(file) {
+        // Recorta al centro y comprime a JPEG para guardarla en Firestore (formato y peso según el uso: W×H, máximo de bytes)
+        async function prepararImagen(file, { W, H, maxBytes }) {
             const origen = await cargarImagenComoBitmap(file);
             const ancho = origen.width, alto = origen.height;
-            const W = 640, H = 360;
             const canvas = document.createElement('canvas');
             canvas.width = W; canvas.height = H;
             const ctx = canvas.getContext('2d');
@@ -1605,9 +1651,11 @@
             if (origen.close) origen.close();
             let calidad = 0.85;
             let data = canvas.toDataURL('image/jpeg', calidad);
-            while (data.length > 200000 && calidad > 0.4) { calidad -= 0.1; data = canvas.toDataURL('image/jpeg', calidad); }
+            while (data.length > maxBytes && calidad > 0.35) { calidad -= 0.1; data = canvas.toDataURL('image/jpeg', calidad); }
             return data;
         }
+        const prepararPortada = (file) => prepararImagen(file, { W: 640, H: 360, maxBytes: 200000 });
+        const prepararFondoAuth = (file) => prepararImagen(file, { W: 1600, H: 1000, maxBytes: 380000 });
 
         matPortadaArchivo.addEventListener('change', async () => {
             const file = matPortadaArchivo.files[0];
@@ -1885,6 +1933,99 @@
                 await refrescarMaterias();
             } catch (e) {
                 mostrarErrorMateria(e);
+            }
+        };
+
+        // ================================================================
+        //  MÓDULO APARIENCIA (fondo de la pantalla de acceso)
+        // ================================================================
+        const fondoPreview = document.getElementById('fondo-preview');
+        const fondoArchivo = document.getElementById('fondo-archivo');
+        const btnQuitarFondo = document.getElementById('btn-quitar-fondo');
+        const btnGuardarFondo = document.getElementById('btn-guardar-fondo');
+        let fondoNuevo = null;      // imagen elegida (data URL) que aún no se guarda
+        let quitarFondoAuth = false;
+        let fondoVersionActual = null;
+
+        function mostrarPreviewFondo(dataUrl) {
+            if (dataUrl) {
+                fondoPreview.innerHTML = `<img src="${dataUrl}" alt="Fondo de la pantalla de acceso">`;
+                btnQuitarFondo.classList.remove('hidden');
+            } else {
+                fondoPreview.innerHTML = '<i class="fas fa-image"></i><span>Sin imagen personalizada — se usa el fondo azul por defecto</span>';
+                btnQuitarFondo.classList.add('hidden');
+            }
+        }
+
+        async function cargarFondoActual() {
+            fondoNuevo = null; quitarFondoAuth = false;
+            mostrarPreviewFondo(null);
+            try {
+                const cfg = await getDoc(doc(db, 'config_app', 'apariencia'));
+                fondoVersionActual = cfg.exists() ? (cfg.data().fondo_v || null) : null;
+                if (fondoVersionActual) {
+                    const r = await getDoc(doc(db, 'config_app', 'apariencia', 'recursos', 'fondo'));
+                    if (r.exists() && r.data().dataUrl) mostrarPreviewFondo(r.data().dataUrl);
+                }
+            } catch (e) {
+                console.warn('No se pudo leer la imagen de fondo actual:', e);
+            }
+        }
+
+        fondoArchivo.addEventListener('change', async () => {
+            const file = fondoArchivo.files[0];
+            if (!file) return;
+            if (!/^image\//.test(file.type)) {
+                Swal.fire('Atención', 'Seleccione un archivo de imagen (JPG, PNG o WEBP).', 'warning');
+                fondoArchivo.value = '';
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                Swal.fire('Atención', 'La imagen supera los 10 MB. Elija una más liviana.', 'warning');
+                fondoArchivo.value = '';
+                return;
+            }
+            try {
+                fondoNuevo = await prepararFondoAuth(file);
+                quitarFondoAuth = false;
+                mostrarPreviewFondo(fondoNuevo);
+            } catch (e) {
+                console.error(e);
+                Swal.fire('Error', 'No se pudo procesar la imagen. Pruebe con otra.', 'error');
+            }
+            fondoArchivo.value = '';
+        });
+
+        btnQuitarFondo.onclick = () => {
+            fondoNuevo = null;
+            quitarFondoAuth = true;
+            mostrarPreviewFondo(null);
+        };
+
+        btnGuardarFondo.onclick = async () => {
+            btnGuardarFondo.disabled = true;
+            try {
+                const refFondo = doc(db, 'config_app', 'apariencia', 'recursos', 'fondo');
+                if (fondoNuevo) {
+                    const v = Date.now();
+                    // primero la imagen y después la versión, para que la pantalla de acceso nunca lea una versión sin imagen
+                    await setDoc(refFondo, { dataUrl: fondoNuevo, v });
+                    await setDoc(doc(db, 'config_app', 'apariencia'), { fondo_v: v }, { merge: true });
+                    fondoVersionActual = v;
+                } else if (quitarFondoAuth) {
+                    await setDoc(doc(db, 'config_app', 'apariencia'), { fondo_v: null }, { merge: true });
+                    try { await deleteDoc(refFondo); } catch (_) {}
+                    fondoVersionActual = null;
+                } else {
+                    Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'No hay cambios que guardar', timer: 1800, showConfirmButton: false });
+                    return;
+                }
+                fondoNuevo = null; quitarFondoAuth = false;
+                Swal.fire({ icon: 'success', title: 'Imagen de fondo guardada', text: 'Se aplicará sola para todos en unos minutos.', timer: 2200, showConfirmButton: false });
+            } catch (e) {
+                mostrarErrorMateria(e);
+            } finally {
+                btnGuardarFondo.disabled = false;
             }
         };
 
@@ -2341,16 +2482,17 @@
         //  NAVEGACIÓN DE TABS
         // ================================================================
         window.changeTab = (id) => {
-            ['tab-preguntas', 'tab-materias', 'tab-excel', 'tab-users', 'tab-auditoria', 'tab-imprimir'].forEach(t => {
+            ['tab-preguntas', 'tab-materias', 'tab-apariencia', 'tab-excel', 'tab-users', 'tab-auditoria', 'tab-imprimir'].forEach(t => {
                 document.getElementById(t).classList.toggle('hidden', t !== id);
             });
             // Actualizar botones activos
-            ['btn-tab-preguntas', 'btn-tab-materias', 'btn-tab-excel', 'btn-tab-users', 'btn-tab-auditoria', 'btn-tab-imprimir'].forEach(b => {
+            ['btn-tab-preguntas', 'btn-tab-materias', 'btn-tab-apariencia', 'btn-tab-excel', 'btn-tab-users', 'btn-tab-auditoria', 'btn-tab-imprimir'].forEach(b => {
                 document.getElementById(b).classList.remove('active');
             });
             document.getElementById(`btn-tab-${id.replace('tab-', '')}`).classList.add('active');
 
             if (id === 'tab-materias') renderTablaMaterias();
+            if (id === 'tab-apariencia') cargarFondoActual();
             if (id === 'tab-users') loadUsers();
             if (id === 'tab-auditoria') cargarAuditoria();
         };
