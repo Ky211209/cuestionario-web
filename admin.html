@@ -2295,18 +2295,18 @@
             const materiaId = document.getElementById('plantilla-materia').value;
             const idEjemplo = materiaId || 'id-de-la-materia';
             const filas = [
-                ['materia_id', 'texto', 'opcion_0', 'opcion_1', 'opcion_2', 'opcion_3', 'respuesta', 'explicacion', 'imagen_url'],
+                ['materia_id', 'texto', 'opcion_0', 'opcion_1', 'opcion_2', 'opcion_3', 'respuesta', 'explicacion', 'imagen_url', 'origen'],
                 [idEjemplo, '[EJEMPLO - borre esta fila] ¿Cuál es la capital de Ecuador?', 'Guayaquil', 'Quito', 'Cuenca', 'Loja', 1,
-                    'Quito es la capital y sede del gobierno nacional.', ''],
+                    'Quito es la capital y sede del gobierno nacional.', '', 'Geografía'],
                 [idEjemplo, '[EJEMPLO - borre esta fila] Seleccione los lenguajes de programación:', 'Python', 'HTML', 'JavaScript', 'Word', '0;2',
-                    'Python y JavaScript son lenguajes de programación; HTML es un lenguaje de marcado.', '']
+                    'Python y JavaScript son lenguajes de programación; HTML es un lenguaje de marcado.', '', '']
             ];
             // Con una materia elegida: 200 filas con materia_id ya rellenado (las filas sin datos se ignoran al importar)
             if (materiaId) {
-                for (let i = 0; i < 200; i++) filas.push([materiaId, null, null, null, null, null, null, null, null]);
+                for (let i = 0; i < 200; i++) filas.push([materiaId, null, null, null, null, null, null, null, null, null]);
             }
             const wsPreguntas = XLSX.utils.aoa_to_sheet(filas);
-            wsPreguntas['!cols'] = [{ wch: 26 }, { wch: 60 }, { wch: 28 }, { wch: 28 }, { wch: 28 }, { wch: 28 }, { wch: 12 }, { wch: 50 }, { wch: 40 }];
+            wsPreguntas['!cols'] = [{ wch: 26 }, { wch: 60 }, { wch: 28 }, { wch: 28 }, { wch: 28 }, { wch: 28 }, { wch: 12 }, { wch: 50 }, { wch: 40 }, { wch: 34 }];
 
             const wsInstrucciones = XLSX.utils.aoa_to_sheet([
                 ['INSTRUCCIONES PARA CARGAR PREGUNTAS - QuizEli'],
@@ -2319,8 +2319,9 @@
                 ['    Selección múltiple: varios números separados por punto y coma, por ejemplo 0;2. No use coma: Excel puede convertir 0,2 en un decimal.'],
                 ['6. explicacion (opcional): por qué la respuesta es correcta.'],
                 ['7. imagen_url (opcional): enlace público de una imagen que se muestra sobre el enunciado.'],
-                ['8. Si en la misma materia ya existe una pregunta con el mismo texto, se actualizan sus opciones, respuesta y explicación.'],
-                ['9. No cambie los nombres de las columnas ni el orden de las hojas: "Preguntas" debe ser la primera.']
+                ['8. origen (opcional): materia de donde viene la pregunta (ej. Minería de Datos). Se muestra como etiqueta en el banco de preguntas. Si queda vacío, no se asigna etiqueta.'],
+                ['9. Si en la misma materia ya existe una pregunta con el mismo texto, se actualizan sus opciones, respuesta y explicación (se conserva su etiqueta de origen si no escribe otra).'],
+                ['10. No cambie los nombres de las columnas ni el orden de las hojas: "Preguntas" debe ser la primera.']
             ]);
             wsInstrucciones['!cols'] = [{ wch: 150 }];
 
@@ -2428,7 +2429,9 @@
                     const respuestaFinal = indicesRespuesta.length > 1 ? indicesRespuesta : (indicesRespuesta[0] ?? parseInt(p.respuesta));
                     const datosExcel = { texto: textoPregunta, opciones: [p.opcion_0.toString().trim(), p.opcion_1.toString().trim(), p.opcion_2.toString().trim(), p.opcion_3.toString().trim()], respuesta: respuestaFinal, explicacion_correcta: p.explicacion ? p.explicacion.toString().trim() : "Consulte el material de estudio oficial." };
                     if (imgUrlExcel) datosExcel.imagen_url = imgUrlExcel;
-                    if (origenPrevio) datosExcel.origen = origenPrevio;
+                    const origenExcel = (p.origen !== undefined && p.origen !== null) ? p.origen.toString().trim() : '';
+                    if (origenExcel) datosExcel.origen = origenExcel;
+                    else if (origenPrevio) datosExcel.origen = origenPrevio;
                     batch.set(ref, datosExcel);
                     opsEnBatch++;
                     if (opsEnBatch >= 400) { await batch.commit(); batch = writeBatch(db); opsEnBatch = 0; }
