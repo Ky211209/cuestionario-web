@@ -242,6 +242,26 @@
         .btn-nueva-pregunta:hover { background: linear-gradient(135deg, #2d8f47, #1e6b35); transform: translateY(-1px); box-shadow: 0 5px 15px rgba(52,168,83,0.35); }
 
         /* ---- MODAL EDICIÓN ---- */
+        /* ── Mover / copiar preguntas entre materias ── */
+        #modal-mover-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9991; backdrop-filter:blur(4px); align-items:center; justify-content:center; padding:20px; }
+        #modal-mover-overlay.visible { display:flex; }
+        #modal-mover { background:white; border-radius:16px; padding:26px; max-width:760px; width:100%; max-height:92vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.25); }
+        #modal-mover h3 { font-size:1.1rem; color:#202124; margin-bottom:4px; }
+        #modal-mover .mov-fila { display:flex; gap:12px; flex-wrap:wrap; margin-top:14px; }
+        #modal-mover .mov-campo { flex:1; min-width:220px; }
+        #modal-mover label.mov-lbl { display:block; font-size:0.78rem; font-weight:700; color:#5f6368; margin-bottom:5px; }
+        #modal-mover select { width:100%; padding:10px; border-radius:7px; border:1.5px solid #ddd; font-size:0.88rem; background:white; }
+        #modal-mover .mov-opciones { display:flex; gap:18px; flex-wrap:wrap; margin-top:14px; font-size:0.88rem; }
+        #modal-mover .mov-opciones label { display:flex; align-items:center; gap:6px; cursor:pointer; }
+        #mov-lista { margin-top:14px; border:1.5px solid #e3e6ea; border-radius:10px; max-height:300px; overflow-y:auto; }
+        #mov-lista .mov-item { display:flex; gap:10px; align-items:flex-start; padding:8px 12px; border-bottom:1px solid #f0f0f0; font-size:0.84rem; cursor:pointer; }
+        #mov-lista .mov-item:last-child { border-bottom:none; }
+        #mov-lista .mov-item:hover { background:#f5f9ff; }
+        #mov-lista .mov-num { min-width:30px; color:#888; font-weight:700; }
+        #mov-lista .mov-tag { background:#e8f0fe; color:#1a56c4; border-radius:10px; font-size:0.68rem; padding:2px 7px; font-weight:600; margin-left:4px; white-space:nowrap; }
+        #mov-resumen { margin-top:12px; padding:10px 14px; background:#f8f9fa; border-radius:8px; font-size:0.86rem; color:#3c4043; }
+        #modal-mover .mov-botones { display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; margin-top:18px; }
+
         #modal-pregunta-overlay {
             display: none;
             position: fixed;
@@ -595,9 +615,14 @@
                     </h3>
                     <p style="font-size:0.82rem; color:#888; margin-top:3px;">Consulta, edita, agrega o elimina preguntas directamente desde aquí.</p>
                 </div>
-                <button class="btn-nueva-pregunta" id="btn-abrir-nueva">
-                    <i class="fas fa-plus-circle"></i> Nueva Pregunta
-                </button>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <button class="btn-secondary" id="btn-abrir-mover" style="padding:10px 16px; border-radius:8px;">
+                        <i class="fas fa-right-left"></i> Mover / copiar preguntas
+                    </button>
+                    <button class="btn-nueva-pregunta" id="btn-abrir-nueva">
+                        <i class="fas fa-plus-circle"></i> Nueva Pregunta
+                    </button>
+                </div>
             </div>
 
             <!-- FILTROS -->
@@ -920,6 +945,55 @@
     <!-- ================================================================
          MODAL: AGREGAR / EDITAR PREGUNTA
          ================================================================ -->
+    <!-- MODAL: MOVER / COPIAR PREGUNTAS ENTRE MATERIAS -->
+    <div id="modal-mover-overlay">
+        <div id="modal-mover">
+            <h3><i class="fas fa-right-left" style="color:#1a73e8;"></i> Mover / copiar preguntas entre materias</h3>
+            <p style="font-size:0.82rem; color:#888;">Elija la materia de origen, cargue sus preguntas, marque las que desea pasar y seleccione el destino.</p>
+
+            <div class="mov-fila">
+                <div class="mov-campo">
+                    <label class="mov-lbl" for="mov-origen">1. Materia de origen</label>
+                    <select id="mov-origen"></select>
+                </div>
+                <div class="mov-campo">
+                    <label class="mov-lbl" for="mov-destino">2. Materia de destino</label>
+                    <select id="mov-destino"></select>
+                </div>
+            </div>
+
+            <div class="mov-opciones">
+                <label><input type="radio" name="mov-accion" value="mover" checked> <span><strong>Mover</strong> (salen de la materia de origen)</span></label>
+                <label><input type="radio" name="mov-accion" value="copiar"> <span><strong>Copiar</strong> (quedan en ambas)</span></label>
+            </div>
+            <div class="mov-opciones" style="margin-top:8px;">
+                <label><input type="checkbox" id="mov-marcar-origen" checked> <span>Etiquetar cada pregunta con su materia de origen</span></label>
+            </div>
+
+            <div style="margin-top:14px;">
+                <button class="btn-primary" id="mov-btn-cargar" style="padding:9px 18px; font-size:0.85rem; border-radius:7px;">
+                    <i class="fas fa-sync-alt"></i> Cargar preguntas de origen
+                </button>
+            </div>
+
+            <div id="mov-lista-wrap" style="display:none;">
+                <label style="display:flex; align-items:center; gap:8px; margin-top:14px; font-size:0.86rem; font-weight:700; cursor:pointer;">
+                    <input type="checkbox" id="mov-todas" checked> Seleccionar todas
+                </label>
+                <div id="mov-lista"></div>
+            </div>
+
+            <div id="mov-resumen" style="display:none;"></div>
+
+            <div class="mov-botones">
+                <button class="btn-secondary" id="mov-btn-cerrar">Cerrar</button>
+                <button class="btn-primary" id="mov-btn-ejecutar" disabled style="padding:10px 20px; border-radius:8px;">
+                    <i class="fas fa-check"></i> Ejecutar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="modal-pregunta-overlay">
         <div id="modal-pregunta">
             <div class="modal-header">
@@ -1108,6 +1182,7 @@
             llenarSelectImpresion();
             llenarSelectPlantilla();
             renderTablaMaterias();
+            if (typeof movLlenarSelects === 'function') movLlenarSelects();
         }
 
         // Populate selects de materias
@@ -1203,6 +1278,7 @@
             if (busqueda) {
                 filtradas = filtradas.filter(p =>
                     (p.texto || '').toLowerCase().includes(busqueda) ||
+                    (p.origen || '').toLowerCase().includes(busqueda) ||
                     (p.opciones || []).some(o => o.toLowerCase().includes(busqueda)) ||
                     (p.explicacion_correcta || '').toLowerCase().includes(busqueda)
                 );
@@ -1301,6 +1377,7 @@
                                 ${miniaturaHtml}
                                 <div style="min-width:0;">
                                     <div class="pregunta-texto">${escapeHtml(p.texto || '')}${p.imagen_url ? ' <span title="Tiene imagen" style="display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,#1a73e8,#155eef);color:white;font-size:0.68rem;padding:2px 7px;border-radius:10px;font-weight:600;vertical-align:middle;"><i class=\'fas fa-image\'></i> IMG</span>' : ''}${esMultiple ? ' <span title="Selección múltiple" style="display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,#34a853,#128a4f);color:white;font-size:0.68rem;padding:2px 7px;border-radius:10px;font-weight:600;vertical-align:middle;"><i class=\'fas fa-check-double\'></i> MÚLTIPLE</span>' : ''}</div>
+                                    ${p.origen ? `<div style="margin:3px 0 4px;"><span title="Materia de origen" style="display:inline-flex;align-items:center;gap:4px;background:#e8f0fe;color:#1a56c4;font-size:0.7rem;padding:2px 8px;border-radius:10px;font-weight:600;"><i class="fas fa-tag"></i> ${escapeHtml(p.origen)}</span></div>` : ''}
                                     <div class="opciones-mini">${opcionesHtml}</div>
                                 </div>
                             </div>
@@ -1513,7 +1590,9 @@
 
             try {
                 if (docId) {
-                    // Actualizar existente
+                    // Actualizar existente (conserva la etiqueta de materia de origen, si la tiene)
+                    const previo = todasLasPreguntas.find(x => x.id === docId);
+                    if (previo && previo.origen) datos.origen = previo.origen;
                     await setDoc(doc(db, `bancos_preguntas/${materiaId}/preguntas`, docId), datos);
                     const idx = todasLasPreguntas.findIndex(p => p.id === docId);
                     if (idx >= 0) todasLasPreguntas[idx] = { id: docId, ...datos };
@@ -1586,6 +1665,176 @@
         function escapeHtml(str) {
             return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
+
+        // ================================================================
+        //  MÓDULO MOVER / COPIAR PREGUNTAS ENTRE MATERIAS
+        // ================================================================
+        const movOverlay = document.getElementById('modal-mover-overlay');
+        const movSelOrigen = document.getElementById('mov-origen');
+        const movSelDestino = document.getElementById('mov-destino');
+        const movLista = document.getElementById('mov-lista');
+        const movListaWrap = document.getElementById('mov-lista-wrap');
+        const movResumen = document.getElementById('mov-resumen');
+        const movBtnEjecutar = document.getElementById('mov-btn-ejecutar');
+        const movTodas = document.getElementById('mov-todas');
+        let movPreguntas = [];   // preguntas cargadas de la materia de origen
+
+        function movAccion() {
+            return document.querySelector('input[name="mov-accion"]:checked').value;
+        }
+        function movNormalizar(t) {
+            return String(t || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        }
+        function movLlenarSelects() {
+            [movSelOrigen, movSelDestino].forEach(sel => {
+                const previo = sel.value;
+                sel.innerHTML = '<option value="">— Seleccione —</option>' +
+                    materias.map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(etiquetaMateria(m))}</option>`).join('');
+                if (previo && materias.some(m => m.id === previo)) sel.value = previo;
+            });
+        }
+        function movSeleccionadas() {
+            return [...movLista.querySelectorAll('input[type="checkbox"]:checked')].map(c => movPreguntas[parseInt(c.dataset.i)]);
+        }
+        function movActualizarResumen() {
+            if (movPreguntas.length === 0) { movResumen.style.display = 'none'; movBtnEjecutar.disabled = true; return; }
+            const sel = movSeleccionadas().length;
+            const verbo = movAccion() === 'mover' ? 'Se moverán' : 'Se copiarán';
+            const destino = movSelDestino.value ? getNombreMateria(movSelDestino.value) : '(seleccione el destino)';
+            movResumen.style.display = 'block';
+            movResumen.innerHTML = `<strong>${sel}</strong> de ${movPreguntas.length} preguntas seleccionadas. ${verbo} desde <strong>${escapeHtml(getNombreMateria(movSelOrigen.value))}</strong> hacia <strong>${escapeHtml(destino)}</strong>.`;
+            movBtnEjecutar.disabled = sel === 0 || !movSelDestino.value;
+        }
+        function movRenderLista() {
+            movLista.innerHTML = movPreguntas.map((p, i) => `
+                <label class="mov-item">
+                    <input type="checkbox" data-i="${i}" checked style="margin-top:3px;">
+                    <span class="mov-num">${i + 1}</span>
+                    <span style="flex:1;">${escapeHtml((p.texto || '').substring(0, 140))}${(p.texto || '').length > 140 ? '…' : ''}${p.origen ? `<span class="mov-tag">${escapeHtml(p.origen)}</span>` : ''}</span>
+                </label>`).join('');
+            movListaWrap.style.display = 'block';
+            movTodas.checked = true;
+            movLista.querySelectorAll('input[type="checkbox"]').forEach(c => c.onchange = () => {
+                const todas = movLista.querySelectorAll('input[type="checkbox"]');
+                movTodas.checked = [...todas].every(x => x.checked);
+                movActualizarResumen();
+            });
+            movActualizarResumen();
+        }
+        async function movCargarOrigen() {
+            const origen = movSelOrigen.value;
+            if (!origen) return Swal.fire({ icon: 'warning', title: 'Atención', text: 'Seleccione primero la materia de origen.', confirmButtonColor: '#1a73e8', target: movOverlay });
+            movLista.innerHTML = '<div style="padding:16px;color:#888;"><i class="fas fa-spinner fa-spin"></i> Cargando...</div>';
+            movListaWrap.style.display = 'block';
+            try {
+                const snap = await getDocs(collection(db, `bancos_preguntas/${origen}/preguntas`));
+                movPreguntas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                if (movPreguntas.length === 0) {
+                    movLista.innerHTML = '<div style="padding:16px;color:#888;">Esta materia no tiene preguntas cargadas.</div>';
+                    movActualizarResumen();
+                    return;
+                }
+                movRenderLista();
+            } catch (e) {
+                console.error(e);
+                movLista.innerHTML = `<div style="padding:16px;color:#ea4335;">Error al cargar: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        document.getElementById('btn-abrir-mover').onclick = () => {
+            movLlenarSelects();
+            const activa = document.getElementById('filtro-materia-crud').value;
+            if (activa && !movSelOrigen.value) movSelOrigen.value = activa;
+            movPreguntas = [];
+            movListaWrap.style.display = 'none';
+            movResumen.style.display = 'none';
+            movBtnEjecutar.disabled = true;
+            movOverlay.classList.add('visible');
+        };
+        document.getElementById('mov-btn-cerrar').onclick = () => movOverlay.classList.remove('visible');
+        movOverlay.addEventListener('mousedown', (e) => { if (e.target === movOverlay) movOverlay.classList.remove('visible'); });
+        document.getElementById('mov-btn-cargar').onclick = movCargarOrigen;
+        movSelOrigen.onchange = () => { movPreguntas = []; movListaWrap.style.display = 'none'; movResumen.style.display = 'none'; movBtnEjecutar.disabled = true; };
+        movSelDestino.onchange = movActualizarResumen;
+        document.querySelectorAll('input[name="mov-accion"]').forEach(r => r.onchange = movActualizarResumen);
+        movTodas.onchange = () => {
+            movLista.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = movTodas.checked);
+            movActualizarResumen();
+        };
+
+        movBtnEjecutar.onclick = async () => {
+            const origen = movSelOrigen.value;
+            const destino = movSelDestino.value;
+            const accion = movAccion();
+            const marcarOrigen = document.getElementById('mov-marcar-origen').checked;
+            const elegidas = movSeleccionadas();
+            const opt = { confirmButtonColor: '#1a73e8', target: movOverlay };
+
+            if (!origen || !destino) return Swal.fire({ ...opt, icon: 'warning', title: 'Atención', text: 'Seleccione la materia de origen y la de destino.' });
+            if (origen === destino) return Swal.fire({ ...opt, icon: 'warning', title: 'Atención', text: 'El origen y el destino deben ser materias distintas.' });
+            if (elegidas.length === 0) return Swal.fire({ ...opt, icon: 'warning', title: 'Atención', text: 'Marque al menos una pregunta.' });
+
+            const verbo = accion === 'mover' ? 'mover' : 'copiar';
+            const conf = await Swal.fire({
+                ...opt,
+                icon: 'question',
+                title: `¿${verbo.charAt(0).toUpperCase() + verbo.slice(1)} ${elegidas.length} pregunta${elegidas.length !== 1 ? 's' : ''}?`,
+                html: `De <strong>${escapeHtml(getNombreMateria(origen))}</strong> a <strong>${escapeHtml(getNombreMateria(destino))}</strong>.` +
+                      (accion === 'mover' ? '<br><small style="color:#888;">Las preguntas saldrán de la materia de origen.</small>' : '<br><small style="color:#888;">La materia de origen no se modifica.</small>') +
+                      '<br><small style="color:#888;">Las preguntas que ya existan en el destino (mismo texto) se omitirán.</small>',
+                showCancelButton: true, confirmButtonText: 'Sí, continuar', cancelButtonText: 'Cancelar'
+            });
+            if (!conf.isConfirmed) return;
+
+            Swal.fire({ title: 'Procesando...', text: 'Por favor espere, no cierre esta ventana.', allowOutsideClick: false, target: movOverlay, didOpen: () => Swal.showLoading() });
+            try {
+                const rutaOrigen = `bancos_preguntas/${origen}/preguntas`;
+                const rutaDestino = `bancos_preguntas/${destino}/preguntas`;
+
+                // Lo que ya existe en el destino (para no duplicar)
+                const snapDestino = await getDocs(collection(db, rutaDestino));
+                const textosDestino = new Set();
+                const idsDestino = new Set();
+                snapDestino.forEach(d => { textosDestino.add(movNormalizar(d.data().texto)); idsDestino.add(d.id); });
+
+                const nombreOrigen = getNombreMateria(origen);
+                let batch = writeBatch(db);
+                let ops = 0, procesadas = 0, omitidas = 0;
+
+                for (const p of elegidas) {
+                    const clave = movNormalizar(p.texto);
+                    if (textosDestino.has(clave)) { omitidas++; continue; }
+                    textosDestino.add(clave);
+
+                    const { id: idOriginal, ...datos } = p;
+                    if (marcarOrigen && !datos.origen) datos.origen = nombreOrigen;
+
+                    let idNuevo = idOriginal;
+                    if (idsDestino.has(idNuevo)) idNuevo = `p_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+                    idsDestino.add(idNuevo);
+
+                    batch.set(doc(db, rutaDestino, idNuevo), datos);
+                    ops++;
+                    if (accion === 'mover') { batch.delete(doc(db, rutaOrigen, idOriginal)); ops++; }
+                    procesadas++;
+
+                    if (ops >= 400) { await batch.commit(); batch = writeBatch(db); ops = 0; }
+                }
+                if (ops > 0) await batch.commit();
+
+                let html = `<strong>${procesadas}</strong> pregunta${procesadas !== 1 ? 's' : ''} ${accion === 'mover' ? 'movida' : 'copiada'}${procesadas !== 1 ? 's' : ''}.`;
+                if (omitidas > 0) html += `<br><strong>${omitidas}</strong> omitida${omitidas !== 1 ? 's' : ''} porque ya existían en el destino${accion === 'mover' ? ' (siguen en el origen)' : ''}.`;
+                await Swal.fire({ icon: 'success', title: 'Proceso terminado', html, confirmButtonColor: '#1a73e8', target: movOverlay });
+
+                // Refrescar lo que se esté viendo
+                await movCargarOrigen();
+                const visible = document.getElementById('filtro-materia-crud').value;
+                if (visible === origen || visible === destino) cargarPreguntas();
+            } catch (e) {
+                console.error(e);
+                Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo completar el proceso: ' + e.message, confirmButtonColor: '#ea4335', target: movOverlay });
+            }
+        };
 
         // ================================================================
         //  MÓDULO CARGAR EXCEL
@@ -2166,8 +2415,8 @@
                     const colRef = collection(db, rutaPreguntas);
                     const q = query(colRef, where("texto", "==", textoPregunta));
                     const snap = await getDocs(q);
-                    let ref;
-                    if (!snap.empty) { ref = doc(db, rutaPreguntas, snap.docs[0].id); actualizadas++; }
+                    let ref; let origenPrevio = null;
+                    if (!snap.empty) { ref = doc(db, rutaPreguntas, snap.docs[0].id); actualizadas++; origenPrevio = snap.docs[0].data().origen || null; }
                     else { ref = doc(db, rutaPreguntas, `p_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`); nuevas++; }
                     const imgUrlExcel = p.imagen_url ? p.imagen_url.toString().trim() : '';
                     // Columna "respuesta": un número (0-3) para opción única, o varios separados por coma/punto y coma
@@ -2179,6 +2428,7 @@
                     const respuestaFinal = indicesRespuesta.length > 1 ? indicesRespuesta : (indicesRespuesta[0] ?? parseInt(p.respuesta));
                     const datosExcel = { texto: textoPregunta, opciones: [p.opcion_0.toString().trim(), p.opcion_1.toString().trim(), p.opcion_2.toString().trim(), p.opcion_3.toString().trim()], respuesta: respuestaFinal, explicacion_correcta: p.explicacion ? p.explicacion.toString().trim() : "Consulte el material de estudio oficial." };
                     if (imgUrlExcel) datosExcel.imagen_url = imgUrlExcel;
+                    if (origenPrevio) datosExcel.origen = origenPrevio;
                     batch.set(ref, datosExcel);
                     opsEnBatch++;
                     if (opsEnBatch >= 400) { await batch.commit(); batch = writeBatch(db); opsEnBatch = 0; }
